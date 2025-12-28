@@ -1,0 +1,6 @@
+services:
+  - type: static
+    name: ocean-meditation
+    env: static
+    buildCommand: npm install && npm run build
+    publishDir: dist
