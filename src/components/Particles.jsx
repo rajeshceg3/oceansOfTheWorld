@@ -1,4 +1,4 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useRef, useMemo, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
@@ -7,7 +7,8 @@ const Particles = ({ color, count = 100 }) => {
 
   const dummy = useMemo(() => new THREE.Object3D(), []);
 
-  const particles = useMemo(() => {
+  // Use useState lazy initialization to ensure randomness happens only once
+  const [particles] = useState(() => {
     const temp = [];
     for (let i = 0; i < count; i++) {
       const t = Math.random() * 100;
@@ -19,9 +20,9 @@ const Particles = ({ color, count = 100 }) => {
       temp.push({ t, factor, speed, x, y, z, mx: 0, my: 0 });
     }
     return temp;
-  }, [count]);
+  });
 
-  useFrame((state) => {
+  useFrame(() => {
     particles.forEach((particle, i) => {
       let { t, factor, speed, x, y, z } = particle;
       t = particle.t += speed / 2;
