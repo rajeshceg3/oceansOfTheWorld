@@ -7,10 +7,17 @@ body {
   padding: 0;
   overflow: hidden;
   background-color: #000;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Lato', sans-serif; /* Default body font */
   user-select: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Montserrat', sans-serif;
 }
 
 canvas {
   touch-action: none;
+  outline: none;
 }
