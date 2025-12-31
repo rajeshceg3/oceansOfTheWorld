@@ -4,18 +4,16 @@ import { EffectComposer, Bloom, Vignette, Noise } from '@react-three/postprocess
 import { BlendFunction } from 'postprocessing';
 import gsap from 'gsap';
 import * as THREE from 'three';
-import { FogExp2 } from 'three';
 import Creatures from './Creatures';
 import Particles from './Particles';
 
 const LightShafts = ({ color }) => {
   const mesh = useRef();
 
-  // Create a stable object that holds uniforms
-  const [uniforms] = useState(() => ({
-      uColor: { value: new THREE.Color(color) },
-      uTime: { value: 0 }
-  }));
+  const uniforms = useMemo(() => ({
+    uColor: { value: new THREE.Color(color) },
+    uTime: { value: 0 }
+  }), [color]);
 
   const shaderMaterial = useMemo(() => new THREE.ShaderMaterial({
     uniforms: uniforms,
@@ -50,39 +48,15 @@ const LightShafts = ({ color }) => {
     blending: THREE.AdditiveBlending,
   }), [uniforms]);
 
-  // Update color when prop changes
+  // Update color safely
   useEffect(() => {
-    // We are mutating the property of the object stored in state.
-    // This is technically mutating state, but since we don't need a re-render for uniforms (WebGL handles it),
-    // and we want to avoid re-creating the material, this is the Three.js way.
-    // However, eslint-plugin-react-hooks is strict.
-    // The workaround is to use a ref to hold the uniforms object, as refs are mutable containers.
-    // But previous attempts failed because I accessed ref.current in render.
-    // Let's try useMemo again but mutate the *values* inside useFrame, and hope linter accepts it if we alias it?
-    // No, linter is smart.
-
-    // Final strategy: useRef for uniforms, pass uniforms.current to material,
-    // BUT do not access uniforms.current in JSX or critical render path that causes "access ref during render" error.
-    // We are passing it to `new ShaderMaterial`, which happens in useMemo. That IS during render.
-
-    // So, we use `useMemo` to create the uniforms object.
-    // But `useMemo` result is immutable according to linter.
-
-    // Correct R3F pattern:
-    // const uniforms = useMemo(() => ({ uTime: { value: 0 } }), [])
-    // useFrame(() => (uniforms.uTime.value = time))
-    // This usually triggers the linter.
-
-    // We will suppress the linter for these specific lines because modifying uniform values
-    // is the standard way to animate shaders in Three.js without destroying performance.
-
     uniforms.uColor.value.set(color);
   }, [color, uniforms]);
 
   useFrame((state) => {
+    // We modify uniforms.uTime.value directly which is the standard way in Three.js/R3F
     // eslint-disable-next-line react-hooks/immutability
     uniforms.uTime.value = state.clock.getElapsedTime() * 0.2;
-
     if (mesh.current) {
         mesh.current.rotation.y += 0.0005;
     }
@@ -103,10 +77,10 @@ const LightShafts = ({ color }) => {
 const CausticsPlane = ({ color }) => {
     const mesh = useRef();
 
-    const [uniforms] = useState(() => ({
+    const uniforms = useMemo(() => ({
         uTime: { value: 0 },
         uColor: { value: new THREE.Color(color) }
-    }));
+    }), [color]);
 
     // Simple noise shader for caustics
     const material = useMemo(() => new THREE.ShaderMaterial({
@@ -186,48 +160,55 @@ const CausticsPlane = ({ color }) => {
     );
 }
 
-const OceanScene = ({ ocean }) => {
-  const { scene, mouse } = useThree();
-  // Use FogExp2 for better depth falloff
-  const fogRef = useRef(new FogExp2(ocean.colors.fog, 0.035));
+const OceanScene = ({ ocean, onTransitionComplete }) => {
+  const { mouse } = useThree();
+  const fogRef = useRef();
+  const bgColorRef = useRef();
 
-  // Initialize fog
-  // Using useLayoutEffect to set it before paint
-  useEffect(() => {
-    // We modify the scene directly as per Three.js patterns
-    const currentScene = scene;
-    currentScene.fog = fogRef.current;
-    currentScene.background = new THREE.Color(ocean.colors.background);
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run once on mount to attach, then GSAP handles updates
+  // Use state to hold the initial colors for args, ensuring the component doesn't re-mount when props change.
+  // We only want to animate the values, not reconstruct the scene graph nodes.
+  const [initialColors] = useState({
+      fog: ocean.colors.fog,
+      background: ocean.colors.background
+  });
 
   // Handle Transitions with GSAP
   useEffect(() => {
-    if (ocean) {
-      gsap.to(fogRef.current, {
-        density: 0.025, // Slightly less dense to show off depth
-        duration: 3,
-        ease: "power2.inOut"
+    if (ocean && fogRef.current && bgColorRef.current) {
+
+      const tl = gsap.timeline({
+          onComplete: () => {
+              if (onTransitionComplete) onTransitionComplete();
+          }
       });
 
-      gsap.to(fogRef.current.color, {
+      // Animate Fog Density and Color
+      tl.to(fogRef.current, {
+        density: 0.025, // Target slightly clearer during transition? or just loop
+        duration: 1.5,
+        ease: "power2.inOut"
+      }, 0);
+
+      tl.to(fogRef.current.color, {
         r: new THREE.Color(ocean.colors.fog).r,
         g: new THREE.Color(ocean.colors.fog).g,
         b: new THREE.Color(ocean.colors.fog).b,
-        duration: 3,
+        duration: 1.5,
         ease: "power2.inOut"
-      });
+      }, 0);
 
-      gsap.to(scene.background, {
+      // Animate Background Color
+      tl.to(bgColorRef.current, {
         r: new THREE.Color(ocean.colors.background).r,
         g: new THREE.Color(ocean.colors.background).g,
         b: new THREE.Color(ocean.colors.background).b,
-        duration: 3,
+        duration: 1.5,
         ease: "power2.inOut"
-      });
+      }, 0);
+
+      // We could also animate density back to 0.035 if needed, but linear is fine for now.
     }
-  }, [ocean, scene]);
+  }, [ocean, onTransitionComplete]);
 
 
   // Gentle camera drift + subtle mouse influence
@@ -253,6 +234,9 @@ const OceanScene = ({ ocean }) => {
 
   return (
     <>
+      <color ref={bgColorRef} attach="background" args={[initialColors.background]} />
+      <fogExp2 ref={fogRef} attach="fog" args={[initialColors.fog, 0.035]} />
+
       <group>
         {/* Soft Top Light (Sunlight from surface) */}
         <spotLight

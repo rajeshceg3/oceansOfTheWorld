@@ -1,22 +1,35 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange }) => {
   const [isIdle, setIsIdle] = useState(false);
-  const [lastActivity, setLastActivity] = useState(() => Date.now()); // Lazy init for purity
+  // Lazy init ref using a function to avoid Date.now() in render
+  // Although useRef(initialValue) executes initialValue, we can pass null and init in effect or use lazy pattern if strict.
+  // Actually, useRef(Date.now()) calls Date.now() during render.
+  // The linter is correct.
+  // Correct pattern: useRef(null) and init in effect or lazily in event handler.
+  const lastActivityRef = useRef(null);
+  const [isSoundOn, setIsSoundOn] = useState(false); // State for sound toggle
 
   useEffect(() => {
+    // Init on mount if null
+    if (lastActivityRef.current === null) {
+      lastActivityRef.current = Date.now();
+    }
+
     const handleActivity = () => {
-      setLastActivity(Date.now());
+      lastActivityRef.current = Date.now();
       setIsIdle(false);
     };
 
+    // Optimization: we could throttle this, but React's state bail-out and ref update are fast enough.
+    // The main fix is ensuring this effect runs only once.
     window.addEventListener('mousemove', handleActivity);
     window.addEventListener('touchstart', handleActivity);
     window.addEventListener('click', handleActivity);
     window.addEventListener('keydown', handleActivity);
 
     const interval = setInterval(() => {
-      if (Date.now() - lastActivity > 4000) { // 4 seconds of inactivity
+      if (lastActivityRef.current && Date.now() - lastActivityRef.current > 4000) { // 4 seconds of inactivity
         setIsIdle(true);
       }
     }, 1000);
@@ -28,7 +41,7 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange }) => {
       window.removeEventListener('keydown', handleActivity);
       clearInterval(interval);
     };
-  }, [lastActivity]);
+  }, []); // Empty dependency array = stable listeners
 
   return (
     <>
@@ -55,7 +68,7 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange }) => {
               key={ocean.id}
               onClick={() => onOceanChange(index)}
               className={`
-                group relative flex flex-col items-center justify-center w-4 h-4 transition-all duration-500 outline-none
+                group relative flex flex-col items-center justify-center w-4 h-4 transition-all duration-500 outline-none focus-visible:ring-2 focus-visible:ring-white/50 rounded-full
                 ${index === currentOceanIndex ? 'scale-125 opacity-100' : 'opacity-40 hover:opacity-100'}
               `}
               aria-label={`Switch to ${ocean.name}`}
@@ -76,20 +89,36 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange }) => {
       </div>
 
       {/* Subtle Corner Info */}
-      <div className={`absolute top-8 right-8 text-right pointer-events-none transition-all duration-[2000ms] ${isIdle ? 'opacity-0 -translate-y-4' : 'opacity-50 translate-y-0'}`}>
-         <p className="text-[10px] font-light text-white tracking-[0.3em] uppercase opacity-70">
+      <div className={`absolute top-8 right-8 text-right pointer-events-none transition-all duration-[2000ms] ${isIdle ? 'opacity-0 -translate-y-4' : 'opacity-100 translate-y-0'}`}>
+         <p className="text-[10px] font-light text-white tracking-[0.3em] uppercase opacity-90">
             Interactive Experience
          </p>
       </div>
 
-      {/* Sound Toggle (Placeholder) */}
-       <div className={`absolute top-8 left-8 text-left pointer-events-none transition-all duration-[2000ms] ${isIdle ? 'opacity-0 -translate-y-4' : 'opacity-30 translate-y-0'}`}>
+      {/* Sound Toggle */}
+       <button
+         onClick={() => setIsSoundOn(!isSoundOn)}
+         className={`absolute top-8 left-8 text-left pointer-events-auto cursor-pointer transition-all duration-[2000ms] outline-none focus-visible:ring-2 focus-visible:ring-white/50 rounded p-1 ${isIdle ? 'opacity-0 -translate-y-4' : 'opacity-80 translate-y-0'}`}
+         aria-label={isSoundOn ? "Mute sound" : "Enable sound"}
+         title={isSoundOn ? "Mute" : "Unmute"}
+       >
          <div className="flex items-center space-x-2">
-            <div className="w-1 h-4 bg-white animate-pulse"></div>
-            <div className="w-1 h-6 bg-white animate-pulse delay-75"></div>
-            <div className="w-1 h-3 bg-white animate-pulse delay-150"></div>
+            {isSoundOn ? (
+                 <>
+                    <div className="w-1 h-4 bg-white animate-[pulse_1s_ease-in-out_infinite]"></div>
+                    <div className="w-1 h-6 bg-white animate-[pulse_1.5s_ease-in-out_infinite] delay-75"></div>
+                    <div className="w-1 h-3 bg-white animate-[pulse_0.8s_ease-in-out_infinite] delay-150"></div>
+                 </>
+            ) : (
+                <>
+                    <div className="w-1 h-4 bg-white/30"></div>
+                    <div className="w-1 h-6 bg-white/30"></div>
+                    <div className="w-1 h-3 bg-white/30"></div>
+                    <div className="absolute w-full h-[1px] bg-white top-1/2 -rotate-45"></div>
+                </>
+            )}
          </div>
-      </div>
+      </button>
     </>
   );
 };
