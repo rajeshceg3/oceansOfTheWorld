@@ -1,4 +1,4 @@
-import React, { Suspense, useState } from 'react';
+import React, { Suspense, useState, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Loader, Html, useProgress } from '@react-three/drei';
 import OceanScene from './OceanScene';
@@ -33,15 +33,41 @@ const OceanWorld = () => {
     if (index !== currentOceanIndex && !isTransitioning) {
         setTargetOceanIndex(index);
         setIsTransitioning(true);
-        // Simple delay for now to simulate transition completion
-        setTimeout(() => {
-            setCurrentOceanIndex(index);
-            setIsTransitioning(false);
-        }, 1500); // Increased transition time for smoothness
     }
   };
 
-  const currentOcean = OCEANS[currentOceanIndex];
+  const handleTransitionComplete = useCallback(() => {
+    setCurrentOceanIndex(targetOceanIndex);
+    setIsTransitioning(false);
+  }, [targetOceanIndex]);
+
+  // We pass targetOceanIndex to OceanScene so it can animate TO it.
+  // Wait, the previous logic was: set target, transition starts, timeout, set current.
+  // OceanScene receives `ocean` prop.
+  // If we pass `OCEANS[targetOceanIndex]` to OceanScene immediately, it will render the new creatures immediately?
+  // We want the environment (colors, fog) to transition, and maybe the creatures too?
+  // If we switch `ocean` prop, the components inside `OceanScene` (like Creatures) will re-render with new types.
+  // If we want a smooth transition, we might need to handle creature unmounting/mounting gracefully.
+  // However, the current requirement is to fix the architectural flaw of using setTimeout.
+  // If we pass the NEW ocean config to OceanScene, GSAP will animate the environment colors to it.
+  // The creatures will switch immediately.
+  // To fix this perfectly, we'd need two scenes or complex transition logic.
+  // BUT, for this task, ensuring the state sync relies on the animation completion is the goal.
+  // So we pass `OCEANS[targetOceanIndex]` to OceanScene. It animates colors.
+  // When animation completes, `onTransitionComplete` fires.
+  // `isTransitioning` is mostly for UI blocking.
+
+  // Actually, if we update `currentOceanIndex` only after transition, then `OCEANS[currentOceanIndex]` is the OLD ocean until transition ends.
+  // That means OceanScene receives OLD ocean until transition ends?
+  // No, that would mean it doesn't animate until transition ends.
+  // It must receive the NEW ocean to animate TO it.
+
+  // So `OceanScene` should receive `OCEANS[targetOceanIndex]`.
+  // And `currentOceanIndex` (used for UI text?) should probably update either immediately or after.
+  // If UI updates immediately (which it does via `targetOceanIndex` in `UIOverlay`), that's fine.
+  // `currentOceanIndex` in this component seems to be "the confirmed ocean".
+
+  const activeOcean = OCEANS[targetOceanIndex];
 
   return (
     <>
@@ -53,11 +79,13 @@ const OceanWorld = () => {
             toneMappingExposure: 1.5,
             powerPreference: "high-performance"
         }}
+        aria-label="3D Ocean View"
+        role="img"
       >
         <Suspense fallback={<CustomLoader />}>
             <OceanScene
-                ocean={currentOcean}
-                isTransitioning={isTransitioning}
+                ocean={activeOcean}
+                onTransitionComplete={handleTransitionComplete}
             />
         </Suspense>
       </Canvas>

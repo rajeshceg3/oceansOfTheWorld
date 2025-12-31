@@ -21,31 +21,33 @@ const Jellyfish = ({ count = 5, color }) => {
   useFrame(({ clock }) => {
     const time = clock.getElapsedTime();
 
-    data.forEach((d, i) => {
-      // Bobbing motion
-      const y = d.position.y + Math.sin(time * d.speed * 0.5 + d.offset) * 2;
-      const x = d.position.x + Math.cos(time * 0.1 + d.offset) * 1;
-      const z = d.position.z + Math.sin(time * 0.1 + d.offset) * 1;
+    if (mesh.current) {
+        data.forEach((d, i) => {
+        // Bobbing motion
+        const y = d.position.y + Math.sin(time * d.speed * 0.5 + d.offset) * 2;
+        const x = d.position.x + Math.cos(time * 0.1 + d.offset) * 1;
+        const z = d.position.z + Math.sin(time * 0.1 + d.offset) * 1;
 
-      dummy.position.set(x, y, z);
+        dummy.position.set(x, y, z);
 
-      // Bell pulsation (contraction/expansion) - Squash and Stretch
-      const pulse = Math.sin(time * 2 + d.offset);
+        // Bell pulsation (contraction/expansion) - Squash and Stretch
+        const pulse = Math.sin(time * 2 + d.offset);
 
-      // Contract: taller and thinner. Expand: shorter and wider.
-      const stretch = 1 + pulse * 0.1; // Height factor
-      const squash = 1 - pulse * 0.1; // Width factor
+        // Contract: taller and thinner. Expand: shorter and wider.
+        const stretch = 1 + pulse * 0.1; // Height factor
+        const squash = 1 - pulse * 0.1; // Width factor
 
-      dummy.scale.set(d.scale * squash, d.scale * stretch, d.scale * squash);
+        dummy.scale.set(d.scale * squash, d.scale * stretch, d.scale * squash);
 
-      // Tilt in direction of movement (approximated)
-      dummy.rotation.x = pulse * 0.2;
-      dummy.rotation.z = Math.cos(time * 0.1) * 0.1;
+        // Tilt in direction of movement (approximated)
+        dummy.rotation.x = pulse * 0.2;
+        dummy.rotation.z = Math.cos(time * 0.1) * 0.1;
 
-      dummy.updateMatrix();
-      mesh.current.setMatrixAt(i, dummy.matrix);
-    });
-    mesh.current.instanceMatrix.needsUpdate = true;
+        dummy.updateMatrix();
+        mesh.current.setMatrixAt(i, dummy.matrix);
+        });
+        mesh.current.instanceMatrix.needsUpdate = true;
+    }
   });
 
   return (
@@ -99,26 +101,28 @@ const SchoolOfFish = ({ count = 200, color }) => {
         const velZ = -Math.sin(time * 0.1) * 0.8;
         const angle = Math.atan2(velX, velZ) + Math.PI; // Face direction
 
-        data.forEach((d, i) => {
-            // Fish position relative to center
-            // Add some individual wave motion
-            const x = center.current.x + d.offset.x;
-            const y = center.current.y + d.offset.y + Math.sin(time * 2 + d.phase) * 0.2;
-            const z = center.current.z + d.offset.z;
+        if (mesh.current) {
+            data.forEach((d, i) => {
+                // Fish position relative to center
+                // Add some individual wave motion
+                const x = center.current.x + d.offset.x;
+                const y = center.current.y + d.offset.y + Math.sin(time * 2 + d.phase) * 0.2;
+                const z = center.current.z + d.offset.z;
 
-            dummy.position.set(x, y, z);
+                dummy.position.set(x, y, z);
 
-            // Orientation
-            dummy.rotation.y = angle + Math.sin(time + d.noiseOffset) * 0.1;
-            dummy.rotation.z = Math.sin(time * 4 + d.phase) * 0.1; // Banking
-            dummy.rotation.x = Math.sin(time * 0.5 + d.phase) * 0.1; // Pitch
+                // Orientation
+                dummy.rotation.y = angle + Math.sin(time + d.noiseOffset) * 0.1;
+                dummy.rotation.z = Math.sin(time * 4 + d.phase) * 0.1; // Banking
+                dummy.rotation.x = Math.sin(time * 0.5 + d.phase) * 0.1; // Pitch
 
-            dummy.scale.set(0.1, 0.1, 0.3); // Elongated
+                dummy.scale.set(0.1, 0.1, 0.3); // Elongated
 
-            dummy.updateMatrix();
-            mesh.current.setMatrixAt(i, dummy.matrix);
-        });
-        mesh.current.instanceMatrix.needsUpdate = true;
+                dummy.updateMatrix();
+                mesh.current.setMatrixAt(i, dummy.matrix);
+            });
+            mesh.current.instanceMatrix.needsUpdate = true;
+        }
     });
 
     return (
@@ -133,16 +137,16 @@ const SchoolOfFish = ({ count = 200, color }) => {
 // Procedural Whale using segments
 const Whale = ({ color }) => {
     const segments = 12;
-    const refs = useRef(new Array(segments).fill(null));
+    // Fix: initialized refs properly without side effects in render
+    const bodyRefs = useRef([]);
+
+    // We use useState to force a re-render once if the array needs initialization?
+    // No, useRef is stable. We just need to ensure the array exists.
+    // We can do it in the ref callback or in useState initializer.
+    // Actually, we don't need to pre-fill it with nulls if we just assign by index.
 
     // Store positions history for the "snake" effect
     const pathRef = useRef(new Array(segments).fill(new THREE.Vector3(0,0,0)));
-
-    // Initialize refs array only once
-    // We can use useLayoutEffect or just rely on the useRef initial value which is now correct-ish
-    // But refs.current needs to be populated by the callback refs in the render loop.
-    // The previous error was: refs.current = ... inside render.
-    // We fixed it by initializing useRef above.
 
     useFrame(({ clock }) => {
         const t = clock.getElapsedTime() * 0.5;
@@ -185,7 +189,7 @@ const Whale = ({ color }) => {
         }
 
         // Render segments
-        refs.current.forEach((mesh, i) => {
+        bodyRefs.current.forEach((mesh, i) => {
             if (!mesh) return;
             mesh.position.copy(pathRef.current[i]);
 
@@ -207,10 +211,11 @@ const Whale = ({ color }) => {
 
     return (
         <group>
+             {/* Create an array to map over. We can't use bodyRefs.current.map because it might be empty initially. */}
              {new Array(segments).fill().map((_, i) => (
                  <mesh
                     key={i}
-                    ref={el => refs.current[i] = el}
+                    ref={el => bodyRefs.current[i] = el}
                     position={[0,0,0]} // Initial
                  >
                     {/* Use a sphere or capsule for smooth segments */}
@@ -237,26 +242,28 @@ const Ray = ({ count = 3, color }) => {
 
     useFrame(({ clock }) => {
         const time = clock.getElapsedTime();
-        data.forEach((d, i) => {
-             // Glide
-             const z = d.position[2] + Math.cos(time * d.speed + d.phase) * 10;
-             const x = d.position[0] + Math.sin(time * d.speed * 0.5 + d.phase) * 10;
-             const y = d.position[1];
+        if (mesh.current) {
+            data.forEach((d, i) => {
+                // Glide
+                const z = d.position[2] + Math.cos(time * d.speed + d.phase) * 10;
+                const x = d.position[0] + Math.sin(time * d.speed * 0.5 + d.phase) * 10;
+                const y = d.position[1];
 
-             dummy.position.set(x, y, z);
-             // Look ahead
-             const lookAtX = x + Math.cos(time * d.speed * 0.5) * 5;
-             const lookAtZ = z - Math.sin(time * d.speed) * 5;
-             dummy.lookAt(lookAtX, y, lookAtZ);
+                dummy.position.set(x, y, z);
+                // Look ahead
+                const lookAtX = x + Math.cos(time * d.speed * 0.5) * 5;
+                const lookAtZ = z - Math.sin(time * d.speed) * 5;
+                dummy.lookAt(lookAtX, y, lookAtZ);
 
-             // Wing flap (scale width)
-             const flap = Math.sin(time * 3 + d.phase) * 0.5 + 1.5;
-             dummy.scale.set(flap * 2, 0.2, 1.5);
+                // Wing flap (scale width)
+                const flap = Math.sin(time * 3 + d.phase) * 0.5 + 1.5;
+                dummy.scale.set(flap * 2, 0.2, 1.5);
 
-             dummy.updateMatrix();
-             mesh.current.setMatrixAt(i, dummy.matrix);
-        });
-        mesh.current.instanceMatrix.needsUpdate = true;
+                dummy.updateMatrix();
+                mesh.current.setMatrixAt(i, dummy.matrix);
+            });
+            mesh.current.instanceMatrix.needsUpdate = true;
+        }
     });
 
     return (
