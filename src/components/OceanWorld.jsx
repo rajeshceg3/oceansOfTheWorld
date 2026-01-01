@@ -1,9 +1,10 @@
-import React, { Suspense, useState, useCallback } from 'react';
+import React, { Suspense, useState, useCallback, lazy } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Loader, Html, useProgress } from '@react-three/drei';
-import OceanScene from './OceanScene';
 import UIOverlay from './UIOverlay';
 import { OCEANS } from '../data/oceans';
+
+const OceanScene = lazy(() => import('./OceanScene'));
 
 const CustomLoader = () => {
   const { progress } = useProgress();

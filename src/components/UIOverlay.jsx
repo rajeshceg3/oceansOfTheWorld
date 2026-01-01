@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useOceanSound } from '../hooks/useOceanSound';
 
 const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange }) => {
   const [isIdle, setIsIdle] = useState(false);
@@ -9,6 +10,8 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange }) => {
   // Correct pattern: useRef(null) and init in effect or lazily in event handler.
   const lastActivityRef = useRef(null);
   const [isSoundOn, setIsSoundOn] = useState(false); // State for sound toggle
+
+  useOceanSound(isSoundOn);
 
   useEffect(() => {
     // Init on mount if null

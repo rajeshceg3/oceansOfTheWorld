@@ -138,15 +138,11 @@ const SchoolOfFish = ({ count = 200, color }) => {
 const Whale = ({ color }) => {
     const segments = 12;
     // Fix: initialized refs properly without side effects in render
-    const bodyRefs = useRef([]);
-
-    // We use useState to force a re-render once if the array needs initialization?
-    // No, useRef is stable. We just need to ensure the array exists.
-    // We can do it in the ref callback or in useState initializer.
-    // Actually, we don't need to pre-fill it with nulls if we just assign by index.
+    // Use an array of correct size to avoid potential sparse array issues if something goes wrong
+    const bodyRefs = useRef(new Array(segments).fill(null));
 
     // Store positions history for the "snake" effect
-    const pathRef = useRef(new Array(segments).fill(new THREE.Vector3(0,0,0)));
+    const pathRef = useRef(new Array(segments).fill(null).map(() => new THREE.Vector3(0,0,0)));
 
     useFrame(({ clock }) => {
         const t = clock.getElapsedTime() * 0.5;

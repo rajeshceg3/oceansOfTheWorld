@@ -164,6 +164,12 @@ const OceanScene = ({ ocean, onTransitionComplete }) => {
   const { mouse } = useThree();
   const fogRef = useRef();
   const bgColorRef = useRef();
+  const creaturesRef = useRef();
+  const timelineRef = useRef(null);
+
+  // We maintain a local state for the creatures so we can fade them out, swap them, and fade them in.
+  // Initially, it matches the prop.
+  const [renderedOcean, setRenderedOcean] = useState(ocean);
 
   // Use state to hold the initial colors for args, ensuring the component doesn't re-mount when props change.
   // We only want to animate the values, not reconstruct the scene graph nodes.
@@ -174,18 +180,28 @@ const OceanScene = ({ ocean, onTransitionComplete }) => {
 
   // Handle Transitions with GSAP
   useEffect(() => {
+    // Kill previous timeline if it exists
+    if (timelineRef.current) {
+        timelineRef.current.kill();
+    }
+
     if (ocean && fogRef.current && bgColorRef.current) {
+      const isReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const duration = isReducedMotion ? 0 : 1.5;
 
       const tl = gsap.timeline({
           onComplete: () => {
               if (onTransitionComplete) onTransitionComplete();
           }
       });
+      timelineRef.current = tl;
+
+      // --- Environment Animation (Parallel) ---
 
       // Animate Fog Density and Color
       tl.to(fogRef.current, {
-        density: 0.025, // Target slightly clearer during transition? or just loop
-        duration: 1.5,
+        density: 0.025,
+        duration: duration,
         ease: "power2.inOut"
       }, 0);
 
@@ -193,7 +209,7 @@ const OceanScene = ({ ocean, onTransitionComplete }) => {
         r: new THREE.Color(ocean.colors.fog).r,
         g: new THREE.Color(ocean.colors.fog).g,
         b: new THREE.Color(ocean.colors.fog).b,
-        duration: 1.5,
+        duration: duration,
         ease: "power2.inOut"
       }, 0);
 
@@ -202,13 +218,64 @@ const OceanScene = ({ ocean, onTransitionComplete }) => {
         r: new THREE.Color(ocean.colors.background).r,
         g: new THREE.Color(ocean.colors.background).g,
         b: new THREE.Color(ocean.colors.background).b,
-        duration: 1.5,
+        duration: duration,
         ease: "power2.inOut"
       }, 0);
 
-      // We could also animate density back to 0.035 if needed, but linear is fine for now.
+
+      // --- Creatures Transition (Sequence) ---
+      if (ocean.id !== renderedOcean.id) {
+          // 1. Fade out current creatures
+          if (creaturesRef.current) {
+              tl.to(creaturesRef.current.position, {
+                  y: -5, // Drop down slightly
+                  duration: duration * 0.3,
+                  ease: "power2.in"
+              }, 0);
+              // Note: We can't easily animate opacity of a whole group of instanced meshes without custom shaders or props.
+              // Instead, we'll use scale to shrink them out or just the position drop.
+              // Or better: Assume we can't easily fade opacity on standard materials without transparent=true everywhere which is expensive.
+              // We will scale them down to 0.
+              tl.to(creaturesRef.current.scale, {
+                  x: 0, y: 0, z: 0,
+                  duration: duration * 0.3,
+                  ease: "back.in(1.7)"
+              }, 0);
+          }
+
+          // 2. Swap Data (at 30% of timeline)
+          tl.call(() => {
+              setRenderedOcean(ocean);
+          }, null, duration * 0.3);
+
+          // 3. Reset and Fade In (at 35% of timeline)
+          if (creaturesRef.current) {
+               // Reset transform for new creatures (needs to be immediate after swap)
+               tl.set(creaturesRef.current.scale, { x: 0, y: 0, z: 0 }, duration * 0.31);
+               tl.set(creaturesRef.current.position, { y: 5 }, duration * 0.31); // Start slightly above?
+
+               // Animate In
+               tl.to(creaturesRef.current.scale, {
+                   x: 1, y: 1, z: 1,
+                   duration: duration * 0.5,
+                   ease: "back.out(1.7)"
+               }, duration * 0.35);
+
+               tl.to(creaturesRef.current.position, {
+                   y: 0,
+                   duration: duration * 0.5,
+                   ease: "power2.out"
+               }, duration * 0.35);
+          }
+      }
     }
-  }, [ocean, onTransitionComplete]);
+
+    return () => {
+        if (timelineRef.current) {
+            timelineRef.current.kill();
+        }
+    };
+  }, [ocean, onTransitionComplete, renderedOcean.id]); // Added renderedOcean.id to dependency to be safe, though setRenderedOcean handles it.
 
 
   // Gentle camera drift + subtle mouse influence
@@ -261,7 +328,9 @@ const OceanScene = ({ ocean, onTransitionComplete }) => {
         <CausticsPlane color={ocean.colors.light} />
 
         <Particles color={ocean.colors.light} count={300} />
-        <Creatures types={ocean.creatures} color={ocean.colors.light} />
+        <group ref={creaturesRef}>
+           <Creatures types={renderedOcean.creatures} color={ocean.colors.light} />
+        </group>
 
       </group>
 
