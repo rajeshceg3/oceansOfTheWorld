@@ -17,6 +17,7 @@ const Jellyfish = ({ count = 5, color }) => {
   });
 
   const dummy = useMemo(() => new THREE.Object3D(), []);
+  const geometry = useMemo(() => new THREE.SphereGeometry(1, 32, 16, 0, Math.PI * 2, 0, Math.PI / 1.5), []);
 
   useFrame(({ clock }) => {
     const time = clock.getElapsedTime();
@@ -51,9 +52,7 @@ const Jellyfish = ({ count = 5, color }) => {
   });
 
   return (
-    <instancedMesh ref={mesh} args={[null, null, count]}>
-      {/* Semi-sphere for the bell */}
-      <sphereGeometry args={[1, 32, 16, 0, Math.PI * 2, 0, Math.PI / 1.5]} />
+    <instancedMesh ref={mesh} args={[geometry, null, count]}>
       <meshPhysicalMaterial
         color={color}
         emissive={color}
@@ -87,6 +86,12 @@ const SchoolOfFish = ({ count = 200, color }) => {
             noiseOffset: Math.random() * 100
         }));
     });
+
+    const geometry = useMemo(() => {
+        const geo = new THREE.ConeGeometry(1, 3, 8);
+        geo.rotateX(Math.PI / 2);
+        return geo;
+    }, []);
 
     useFrame(({ clock }) => {
         const time = clock.getElapsedTime();
@@ -126,9 +131,7 @@ const SchoolOfFish = ({ count = 200, color }) => {
     });
 
     return (
-        <instancedMesh ref={mesh} args={[null, null, count]}>
-            {/* Simple cone shape for fish */}
-            <coneGeometry args={[1, 3, 8]} rotation={[Math.PI / 2, 0, 0]} />
+        <instancedMesh ref={mesh} args={[geometry, null, count]}>
             <meshStandardMaterial color={color} roughness={0.3} metalness={0.6} />
         </instancedMesh>
     );
@@ -143,6 +146,8 @@ const Whale = ({ color }) => {
 
     // Store positions history for the "snake" effect
     const pathRef = useRef(new Array(segments).fill(null).map(() => new THREE.Vector3(0,0,0)));
+
+    const geometry = useMemo(() => new THREE.SphereGeometry(1, 16, 16), []);
 
     useFrame(({ clock }) => {
         const t = clock.getElapsedTime() * 0.5;
@@ -213,9 +218,8 @@ const Whale = ({ color }) => {
                     key={i}
                     ref={el => bodyRefs.current[i] = el}
                     position={[0,0,0]} // Initial
+                    geometry={geometry}
                  >
-                    {/* Use a sphere or capsule for smooth segments */}
-                    <sphereGeometry args={[1, 16, 16]} />
                     <meshStandardMaterial color={color} roughness={0.6} metalness={0.2} />
                  </mesh>
              ))}
@@ -235,6 +239,8 @@ const Ray = ({ count = 3, color }) => {
             phase: Math.random() * Math.PI * 2
         }));
     });
+
+    const geometry = useMemo(() => new THREE.BoxGeometry(1, 1, 2), []);
 
     useFrame(({ clock }) => {
         const time = clock.getElapsedTime();
@@ -263,8 +269,7 @@ const Ray = ({ count = 3, color }) => {
     });
 
     return (
-        <instancedMesh ref={mesh} args={[null, null, count]}>
-            <boxGeometry args={[1, 1, 2]} />
+        <instancedMesh ref={mesh} args={[geometry, null, count]}>
             <meshStandardMaterial color={color} roughness={0.5} />
         </instancedMesh>
     );
