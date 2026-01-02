@@ -83,7 +83,7 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange }) => {
                 `}
               />
               {/* Tooltip on hover */}
-              <span className="absolute -top-10 text-[10px] tracking-widest text-white/90 opacity-0 group-hover:opacity-100 transition-all duration-500 -translate-y-2 group-hover:translate-y-0 uppercase whitespace-nowrap bg-black/20 px-2 py-1 rounded backdrop-blur-sm">
+              <span className="absolute -top-10 text-[10px] tracking-widest text-white/90 opacity-0 group-hover:opacity-100 transition-all duration-500 -translate-y-2 group-hover:translate-y-0 uppercase whitespace-nowrap bg-black/20 px-2 py-1 rounded backdrop-blur-sm pointer-events-none">
                 {ocean.name}
               </span>
             </button>
