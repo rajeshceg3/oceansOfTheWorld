@@ -149,23 +149,30 @@ const Whale = ({ color }) => {
 
     const geometry = useMemo(() => new THREE.SphereGeometry(1, 16, 16), []);
 
+    // Reused vectors to avoid GC
+    const headPos = useMemo(() => new THREE.Vector3(), []);
+    const nextPos = useMemo(() => new THREE.Vector3(), []);
+    const direction = useMemo(() => new THREE.Vector3(), []);
+    const vec = useMemo(() => new THREE.Vector3(), []);
+
     useFrame(({ clock }) => {
         const t = clock.getElapsedTime() * 0.5;
 
         // Head position (Leading the way)
-        const headPos = new THREE.Vector3(
+        headPos.set(
             Math.sin(t * 0.3) * 25,
             Math.sin(t * 0.5) * 5 - 5,
             Math.cos(t * 0.3) * 15 - 15
         );
 
         // Calculate tangent for head rotation
-        const nextPos = new THREE.Vector3(
+        nextPos.set(
              Math.sin((t + 0.01) * 0.3) * 25,
              Math.sin((t + 0.01) * 0.5) * 5 - 5,
              Math.cos((t + 0.01) * 0.3) * 15 - 15
         );
-        const direction = nextPos.clone().sub(headPos).normalize();
+
+        direction.copy(nextPos).sub(headPos).normalize();
 
         if (!pathRef.current[0]) return;
 
@@ -179,13 +186,14 @@ const Whale = ({ color }) => {
 
             // Move towards target, maintaining distance
             const dist = 1.5; // segment distance
-            const vec = target.clone().sub(current);
+            vec.copy(target).sub(current);
             const length = vec.length();
 
             // Simple follow logic: move if too far
             if (length > dist) {
-                const move = vec.normalize().multiplyScalar(length - dist);
-                current.add(move);
+                // vec is already target - current. Normalize it.
+                vec.normalize().multiplyScalar(length - dist);
+                current.add(vec);
             }
         }
 
@@ -198,7 +206,13 @@ const Whale = ({ color }) => {
             if (i > 0) {
                  mesh.lookAt(pathRef.current[i-1]);
             } else {
-                 mesh.lookAt(headPos.clone().add(direction.multiplyScalar(10)));
+                 // We need a temporary vector to avoid modifying headPos or direction
+                 // But actually lookAt doesn't modify the argument.
+                 // We do need to compute the target point though.
+                 // We can use the 'nextPos' vector or 'vec' since they are available and scratch variables here.
+                 // Let's use `vec` as a temporary target.
+                 vec.copy(headPos).addScaledVector(direction, 10);
+                 mesh.lookAt(vec);
             }
 
             // Scale body to taper

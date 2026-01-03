@@ -32,7 +32,7 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange }) => {
     window.addEventListener('keydown', handleActivity);
 
     const interval = setInterval(() => {
-      if (lastActivityRef.current && Date.now() - lastActivityRef.current > 4000) { // 4 seconds of inactivity
+      if (lastActivityRef.current && Date.now() - lastActivityRef.current > 8000) { // 8 seconds of inactivity
         setIsIdle(true);
       }
     }, 1000);
@@ -48,9 +48,12 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange }) => {
 
   return (
     <>
+      {/* Gradient for contrast */}
+      <div className={`absolute bottom-0 left-0 w-full h-96 bg-gradient-to-t from-black/40 via-black/10 to-transparent pointer-events-none transition-opacity duration-[1500ms] ${isIdle ? 'opacity-0' : 'opacity-100'}`} />
+
       {/* Title / Description - Always fades when idle */}
       <div
-        className={`absolute bottom-32 left-0 w-full text-center pointer-events-none transition-all duration-[1500ms] ease-in-out ${isIdle ? 'opacity-0 translate-y-4 blur-sm' : 'opacity-100 translate-y-0 blur-0'}`}
+        className={`absolute bottom-32 left-0 w-full text-center pointer-events-none transition-all duration-[1500ms] motion-reduce:transition-none ease-in-out ${isIdle ? 'opacity-0 translate-y-4 blur-sm' : 'opacity-100 translate-y-0 blur-0'}`}
       >
         <h1 className="text-4xl md:text-6xl font-extralight tracking-[0.3em] text-white/90 uppercase drop-shadow-2xl font-display">
           {oceans[currentOceanIndex].name}
@@ -63,7 +66,7 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange }) => {
 
       {/* Navigation - Fades when idle, reappears on interaction */}
       <div
-        className={`absolute bottom-10 left-0 w-full flex justify-center z-10 pointer-events-none transition-all duration-[1500ms] ease-out ${isIdle ? 'opacity-0 translate-y-8' : 'opacity-100 translate-y-0'}`}
+        className={`absolute bottom-10 left-0 w-full flex justify-center z-10 pointer-events-none transition-all duration-[1500ms] motion-reduce:transition-none ease-out ${isIdle ? 'opacity-0 translate-y-8' : 'opacity-100 translate-y-0'}`}
       >
         <div className="flex space-x-8 bg-black/10 backdrop-blur-md border border-white/10 px-8 py-4 rounded-full pointer-events-auto transition-all duration-500 hover:bg-black/20 hover:border-white/20 shadow-2xl">
           {oceans.map((ocean, index) => (
