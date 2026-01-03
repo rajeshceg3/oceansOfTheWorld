@@ -34,6 +34,15 @@ const OceanWorld = () => {
     if (index !== currentOceanIndex && !isTransitioning) {
         setTargetOceanIndex(index);
         setIsTransitioning(true);
+
+        // Safety fallback: ensure we don't get stuck in transition state
+        // if the GSAP callback fails to fire for some reason
+        setTimeout(() => {
+            setIsTransitioning(false);
+            // We can also forcefully set the index here if needed, but
+            // allowing the natural flow is better if it works.
+            // This just unlocks the UI.
+        }, 5000);
     }
   };
 
