@@ -46,7 +46,7 @@ const Particles = ({ color, count = 100 }) => {
   return (
     <instancedMesh ref={mesh} args={[null, null, count]}>
       <dodecahedronGeometry args={[0.2, 0]} />
-      <meshBasicMaterial color={color} transparent opacity={0.6} blending={THREE.AdditiveBlending} />
+      <meshBasicMaterial color={color} transparent opacity={0.5} />
     </instancedMesh>
   );
 };

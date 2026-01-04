@@ -3,10 +3,10 @@ export const OCEANS = [
     name: "Pacific Serenity",
     id: "pacific",
     colors: {
-      fog: "#b3cde0", // Pastel Blue
-      water: "#6497b1", // Softer Blue
-      light: "#fff5e6", // Warm White
-      background: "#eef7fa" // Very light blue
+      fog: "#9ab2c5", // Darker Pastel Blue for better contrast
+      water: "#4a7d97", // Deepened Blue
+      light: "#fff5e6", // Warm White (unchanged)
+      background: "#d4e4ea" // Slightly darker background
     },
     description: "Drifting through calm, pastel waters.",
     creatures: ["whale", "jellyfish"]
@@ -15,10 +15,10 @@ export const OCEANS = [
     name: "Atlantic Drift",
     id: "atlantic",
     colors: {
-      fog: "#ccebc5", // Sage/Mint
-      water: "#7bccc4", // Soft Teal
+      fog: "#a3cca9", // Darker Sage
+      water: "#5baea6", // Deeper Teal
       light: "#f0f9e8", // Pale Greenish White
-      background: "#e0f3db" // Light Green
+      background: "#d0e4cb" // Darker Light Green
     },
     description: "Gentle currents and minty hues.",
     creatures: ["school", "ray"]
@@ -27,10 +27,10 @@ export const OCEANS = [
     name: "Indian Sunset",
     id: "indian",
     colors: {
-      fog: "#fbb4ae", // Pastel Red/Pink
-      water: "#f768a1", // Softer Pink/Magenta
+      fog: "#e39a95", // Darker Pastel Red/Pink
+      water: "#d8508a", // Deeper Pink/Magenta
       light: "#fff7bc", // Pale Yellow
-      background: "#feebe2" // Very pale pink
+      background: "#ebd5cc" // Darker pale pink
     },
     description: "Warm coral tones and golden light.",
     creatures: ["jellyfish", "school"]
@@ -39,10 +39,10 @@ export const OCEANS = [
     name: "Southern Ice",
     id: "southern",
     colors: {
-      fog: "#decbe4", // Pastel Purple/Lavender
-      water: "#9e9ac8", // Soft Purple
+      fog: "#c2b0d9", // Darker Pastel Purple
+      water: "#7e7ab4", // Deeper Purple
       light: "#f1eef6", // Lavender White
-      background: "#f2f0f7" // Very pale purple
+      background: "#e2dff0" // Darker pale purple
     },
     description: "A dream of lavender and ice.",
     creatures: ["whale", "ray"]
@@ -51,10 +51,10 @@ export const OCEANS = [
     name: "Arctic Aurora",
     id: "arctic",
     colors: {
-      fog: "#b3e2cd", // Pastel Teal
-      water: "#4eb3d3", // Soft Blue
+      fog: "#97c6b1", // Darker Pastel Teal
+      water: "#369ab9", // Deeper Blue
       light: "#fff2ae", // Pale Glow
-      background: "#e5f5f9" // Very pale teal
+      background: "#d2e7eb" // Darker pale teal
     },
     description: "Soft lights dancing in the north.",
     creatures: ["whale", "school"]
