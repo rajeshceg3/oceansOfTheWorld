@@ -86,7 +86,7 @@ const OceanWorld = () => {
         dpr={[1, 2]} // Optimize for mobile
         gl={{
             antialias: false, // Post-processing often handles AA better or makes it unnecessary, saving perf
-            toneMappingExposure: 1.5,
+            toneMappingExposure: 0.9,
             powerPreference: "high-performance"
         }}
         aria-label="3D Ocean View"

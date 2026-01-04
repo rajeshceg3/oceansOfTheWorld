@@ -53,15 +53,15 @@ const Jellyfish = ({ count = 5, color }) => {
 
   return (
     <instancedMesh ref={mesh} args={[geometry, null, count]}>
-      <meshPhysicalMaterial
+      {/* Replaced meshPhysicalMaterial (transmission) with Standard for stability and performance */}
+      <meshStandardMaterial
         color={color}
         emissive={color}
-        emissiveIntensity={0.5}
-        transmission={0.8}
-        thickness={2}
-        roughness={0.1}
-        ior={1.5}
-        clearcoat={1}
+        emissiveIntensity={0.4}
+        transparent={true}
+        opacity={0.6}
+        roughness={0.2}
+        metalness={0.1}
         side={THREE.DoubleSide}
       />
     </instancedMesh>
@@ -132,7 +132,13 @@ const SchoolOfFish = ({ count = 200, color }) => {
 
     return (
         <instancedMesh ref={mesh} args={[geometry, null, count]}>
-            <meshStandardMaterial color={color} roughness={0.3} metalness={0.6} />
+            <meshStandardMaterial
+                color={color}
+                emissive={color}
+                emissiveIntensity={0.3}
+                roughness={0.3}
+                metalness={0.6}
+            />
         </instancedMesh>
     );
 };
@@ -140,8 +146,6 @@ const SchoolOfFish = ({ count = 200, color }) => {
 // Procedural Whale using segments
 const Whale = ({ color }) => {
     const segments = 12;
-    // Fix: initialized refs properly without side effects in render
-    // Use an array of correct size to avoid potential sparse array issues if something goes wrong
     const bodyRefs = useRef(new Array(segments).fill(null));
 
     // Store positions history for the "snake" effect
@@ -206,11 +210,6 @@ const Whale = ({ color }) => {
             if (i > 0) {
                  mesh.lookAt(pathRef.current[i-1]);
             } else {
-                 // We need a temporary vector to avoid modifying headPos or direction
-                 // But actually lookAt doesn't modify the argument.
-                 // We do need to compute the target point though.
-                 // We can use the 'nextPos' vector or 'vec' since they are available and scratch variables here.
-                 // Let's use `vec` as a temporary target.
                  vec.copy(headPos).addScaledVector(direction, 10);
                  mesh.lookAt(vec);
             }
@@ -226,7 +225,6 @@ const Whale = ({ color }) => {
 
     return (
         <group>
-             {/* Create an array to map over. We can't use bodyRefs.current.map because it might be empty initially. */}
              {new Array(segments).fill().map((_, i) => (
                  <mesh
                     key={i}
@@ -234,7 +232,14 @@ const Whale = ({ color }) => {
                     position={[0,0,0]} // Initial
                     geometry={geometry}
                  >
-                    <meshStandardMaterial color={color} roughness={0.6} metalness={0.2} />
+                    {/* Increased emissive intensity slightly */}
+                    <meshStandardMaterial
+                        color={color}
+                        emissive={color}
+                        emissiveIntensity={0.3}
+                        roughness={0.4}
+                        metalness={0.3}
+                    />
                  </mesh>
              ))}
         </group>
@@ -284,7 +289,12 @@ const Ray = ({ count = 3, color }) => {
 
     return (
         <instancedMesh ref={mesh} args={[geometry, null, count]}>
-            <meshStandardMaterial color={color} roughness={0.5} />
+            <meshStandardMaterial
+                color={color}
+                emissive={color}
+                emissiveIntensity={0.3}
+                roughness={0.5}
+            />
         </instancedMesh>
     );
 }

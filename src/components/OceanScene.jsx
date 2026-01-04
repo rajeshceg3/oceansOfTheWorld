@@ -1,7 +1,5 @@
 import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
-import { EffectComposer, Bloom, Vignette, Noise } from '@react-three/postprocessing';
-import { BlendFunction } from 'postprocessing';
 import gsap from 'gsap';
 import * as THREE from 'three';
 import Creatures from './Creatures';
@@ -48,13 +46,11 @@ const LightShafts = ({ color }) => {
     blending: THREE.AdditiveBlending,
   }), [uniforms]);
 
-  // Update color safely
   useEffect(() => {
     uniforms.uColor.value.set(color);
   }, [color, uniforms]);
 
   useFrame((state) => {
-    // We modify uniforms.uTime.value directly which is the standard way in Three.js/R3F
     // eslint-disable-next-line react-hooks/immutability
     uniforms.uTime.value = state.clock.getElapsedTime() * 0.2;
     if (mesh.current) {
@@ -64,7 +60,6 @@ const LightShafts = ({ color }) => {
 
   return (
     <group position={[0, 10, 0]} rotation={[0, 0, Math.PI]}>
-      {/* Several cones for light shafts */}
       <mesh ref={mesh} position={[0, -5, 0]}>
         <cylinderGeometry args={[5, 12, 40, 64, 1, true]} />
         <primitive object={shaderMaterial} attach="material" />
@@ -73,7 +68,6 @@ const LightShafts = ({ color }) => {
   );
 };
 
-// Caustics Simulation Plane
 const CausticsPlane = ({ color }) => {
     const mesh = useRef();
 
@@ -82,7 +76,6 @@ const CausticsPlane = ({ color }) => {
         uColor: { value: new THREE.Color(color) }
     }), [color]);
 
-    // Simple noise shader for caustics
     const material = useMemo(() => new THREE.ShaderMaterial({
         uniforms: uniforms,
         vertexShader: `
@@ -97,7 +90,6 @@ const CausticsPlane = ({ color }) => {
             uniform vec3 uColor;
             varying vec2 vUv;
 
-            // Simplex noise function (simplified)
             vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
             vec2 mod289(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
             vec3 permute(vec3 x) { return mod289(((x*34.0)+1.0)*x); }
@@ -132,7 +124,6 @@ const CausticsPlane = ({ color }) => {
                 float noise2 = snoise(vUv * 20.0 - time * 0.5);
 
                 float combined = (noise1 + noise2) * 0.5;
-                // Sharpen the noise to look like caustics
                 float caustics = smoothstep(0.4, 0.6, combined);
 
                 gl_FragColor = vec4(uColor, caustics * 0.1);
@@ -167,12 +158,7 @@ const OceanScene = ({ ocean, onTransitionComplete }) => {
   const creaturesRef = useRef();
   const timelineRef = useRef(null);
 
-  // We maintain a local state for the creatures so we can fade them out, swap them, and fade them in.
-  // Initially, it matches the prop.
   const [renderedOcean, setRenderedOcean] = useState(ocean);
-
-  // Use state to hold the initial colors for args, ensuring the component doesn't re-mount when props change.
-  // We only want to animate the values, not reconstruct the scene graph nodes.
   const [initialColors] = useState({
       fog: ocean.colors.fog,
       background: ocean.colors.background
@@ -180,7 +166,6 @@ const OceanScene = ({ ocean, onTransitionComplete }) => {
 
   // Handle Transitions with GSAP
   useEffect(() => {
-    // Kill previous timeline if it exists
     if (timelineRef.current) {
         timelineRef.current.kill();
     }
@@ -197,10 +182,8 @@ const OceanScene = ({ ocean, onTransitionComplete }) => {
       timelineRef.current = tl;
 
       // --- Environment Animation (Parallel) ---
-
-      // Animate Fog Density and Color
       tl.to(fogRef.current, {
-        density: 0.025,
+        density: 0.012,
         duration: duration,
         ease: "power2.inOut"
       }, 0);
@@ -213,7 +196,6 @@ const OceanScene = ({ ocean, onTransitionComplete }) => {
         ease: "power2.inOut"
       }, 0);
 
-      // Animate Background Color
       tl.to(bgColorRef.current, {
         r: new THREE.Color(ocean.colors.background).r,
         g: new THREE.Color(ocean.colors.background).g,
@@ -225,17 +207,12 @@ const OceanScene = ({ ocean, onTransitionComplete }) => {
 
       // --- Creatures Transition (Sequence) ---
       if (ocean.id !== renderedOcean.id) {
-          // 1. Fade out current creatures
           if (creaturesRef.current) {
               tl.to(creaturesRef.current.position, {
-                  y: -5, // Drop down slightly
+                  y: -5,
                   duration: duration * 0.3,
                   ease: "power2.in"
               }, 0);
-              // Note: We can't easily animate opacity of a whole group of instanced meshes without custom shaders or props.
-              // Instead, we'll use scale to shrink them out or just the position drop.
-              // Or better: Assume we can't easily fade opacity on standard materials without transparent=true everywhere which is expensive.
-              // We will scale them down to 0.
               tl.to(creaturesRef.current.scale, {
                   x: 0, y: 0, z: 0,
                   duration: duration * 0.3,
@@ -243,18 +220,14 @@ const OceanScene = ({ ocean, onTransitionComplete }) => {
               }, 0);
           }
 
-          // 2. Swap Data (at 30% of timeline)
           tl.call(() => {
               setRenderedOcean(ocean);
           }, null, duration * 0.3);
 
-          // 3. Reset and Fade In (at 35% of timeline)
           if (creaturesRef.current) {
-               // Reset transform for new creatures (needs to be immediate after swap)
                tl.set(creaturesRef.current.scale, { x: 0, y: 0, z: 0 }, duration * 0.31);
-               tl.set(creaturesRef.current.position, { y: 5 }, duration * 0.31); // Start slightly above?
+               tl.set(creaturesRef.current.position, { y: 5 }, duration * 0.31);
 
-               // Animate In
                tl.to(creaturesRef.current.scale, {
                    x: 1, y: 1, z: 1,
                    duration: duration * 0.5,
@@ -275,54 +248,40 @@ const OceanScene = ({ ocean, onTransitionComplete }) => {
             timelineRef.current.kill();
         }
     };
-  }, [ocean, onTransitionComplete, renderedOcean.id]); // Added renderedOcean.id to dependency to be safe, though setRenderedOcean handles it.
+  }, [ocean, onTransitionComplete, renderedOcean.id]);
 
 
-  // Gentle camera drift + subtle mouse influence
   useFrame((state) => {
     const t = state.clock.getElapsedTime();
-
-    // Auto drift
     const driftX = Math.sin(t * 0.1) * 2;
     const driftY = Math.cos(t * 0.15) * 1;
-
-    // Mouse influence (mapped to -1 to 1) - subtle parallax
-    // We dampen the mouse input significantly to keep it calm
     const mouseX = (mouse.x * 3);
     const mouseY = (mouse.y * 1.5);
-
-    // Smoothly interpolate current camera position to target drift + mouse
     state.camera.position.x = THREE.MathUtils.lerp(state.camera.position.x, driftX + mouseX, 0.02);
     state.camera.position.y = THREE.MathUtils.lerp(state.camera.position.y, driftY + mouseY, 0.02);
-
-    // Always look slightly forward but drift focus too
     state.camera.lookAt(driftX * 0.3, driftY * 0.3, -20);
   });
 
   return (
     <>
       <color ref={bgColorRef} attach="background" args={[initialColors.background]} />
-      <fogExp2 ref={fogRef} attach="fog" args={[initialColors.fog, 0.035]} />
+      <fogExp2 ref={fogRef} attach="fog" args={[initialColors.fog, 0.012]} />
 
       <group>
-        {/* Soft Top Light (Sunlight from surface) */}
+        {/* Disabled castShadow to prevent WebGL feedback loops and performance degradation */}
         <spotLight
           position={[0, 20, 0]}
           angle={0.6}
           penumbra={1}
-          intensity={1.5}
+          intensity={1.0}
           color={ocean.colors.light}
-          castShadow
         />
 
-        {/* Fill Light (Ambient ocean scatter) */}
         <ambientLight intensity={0.6} color={ocean.colors.water} />
 
-        {/* Rim/Back light for creatures */}
-        <pointLight position={[0, -10, -10]} intensity={1} color={ocean.colors.light} distance={30} />
+        <pointLight position={[0, -10, -10]} intensity={0.8} color={ocean.colors.light} distance={30} />
 
-        {/* Deep blue light from below for depth */}
-        <directionalLight position={[0, -20, 0]} intensity={0.5} color={ocean.colors.water} />
+        <directionalLight position={[0, -20, 0]} intensity={0.8} color={ocean.colors.water} />
 
         <LightShafts color={ocean.colors.light} />
         <CausticsPlane color={ocean.colors.light} />
@@ -333,13 +292,6 @@ const OceanScene = ({ ocean, onTransitionComplete }) => {
         </group>
 
       </group>
-
-      {/* Post Processing */}
-      <EffectComposer disableNormalPass>
-        <Bloom luminanceThreshold={0.8} intensity={0.5} radius={0.5} levels={5} />
-        <Noise opacity={0.05} blendFunction={BlendFunction.OVERLAY} />
-        <Vignette eskil={false} offset={0.1} darkness={0.5} />
-      </EffectComposer>
     </>
   );
 };

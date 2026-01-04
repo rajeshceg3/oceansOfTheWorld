@@ -49,17 +49,17 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange }) => {
   return (
     <>
       {/* Gradient for contrast */}
-      <div className={`absolute bottom-0 left-0 w-full h-96 bg-gradient-to-t from-black/40 via-black/10 to-transparent pointer-events-none transition-opacity duration-[1500ms] ${isIdle ? 'opacity-0' : 'opacity-100'}`} />
+      <div className={`absolute bottom-0 left-0 w-full h-[50vh] bg-gradient-to-t from-black/60 via-black/20 to-transparent pointer-events-none transition-opacity duration-[1500ms] ${isIdle ? 'opacity-0' : 'opacity-100'}`} />
 
       {/* Title / Description - Always fades when idle */}
       <div
         className={`absolute bottom-32 left-0 w-full text-center pointer-events-none transition-all duration-[1500ms] motion-reduce:transition-none ease-in-out ${isIdle ? 'opacity-0 translate-y-4 blur-sm' : 'opacity-100 translate-y-0 blur-0'}`}
       >
-        <h1 className="text-4xl md:text-6xl font-extralight tracking-[0.3em] text-white/90 uppercase drop-shadow-2xl font-display">
+        <h1 className="text-4xl md:text-6xl font-extralight tracking-[0.3em] text-white/95 uppercase drop-shadow-2xl font-display">
           {oceans[currentOceanIndex].name}
         </h1>
-        <div className="w-16 h-[1px] bg-white/30 mx-auto my-4"></div>
-        <p className="text-sm md:text-base font-light text-white/80 tracking-widest font-sans max-w-md mx-auto">
+        <div className="w-16 h-[1px] bg-white/40 mx-auto my-4 shadow-sm"></div>
+        <p className="text-sm md:text-base font-light text-white/90 tracking-widest font-sans max-w-md mx-auto drop-shadow-md">
           {oceans[currentOceanIndex].description}
         </p>
       </div>
