@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
 // Improved Jellyfish with organic pulsing
-const Jellyfish = ({ count = 5, color }) => {
+const Jellyfish = ({ count = 5, colorRef }) => {
   const mesh = useRef();
 
   // Use state to initialize random data once to avoid impurity
@@ -23,6 +23,12 @@ const Jellyfish = ({ count = 5, color }) => {
     const time = clock.getElapsedTime();
 
     if (mesh.current) {
+        // Sync Color
+        if (colorRef.current) {
+            mesh.current.material.color.copy(colorRef.current);
+            mesh.current.material.emissive.copy(colorRef.current);
+        }
+
         data.forEach((d, i) => {
         // Bobbing motion
         const y = d.position.y + Math.sin(time * d.speed * 0.5 + d.offset) * 2;
@@ -55,8 +61,8 @@ const Jellyfish = ({ count = 5, color }) => {
     <instancedMesh ref={mesh} args={[geometry, null, count]}>
       {/* Replaced meshPhysicalMaterial (transmission) with Standard for stability and performance */}
       <meshStandardMaterial
-        color={color}
-        emissive={color}
+        color="#ffffff"
+        emissive="#ffffff"
         emissiveIntensity={0.4}
         transparent={true}
         opacity={0.6}
@@ -69,7 +75,7 @@ const Jellyfish = ({ count = 5, color }) => {
 };
 
 // Improved School of Fish with cohesive movement
-const SchoolOfFish = ({ count = 200, color }) => {
+const SchoolOfFish = ({ count = 200, colorRef }) => {
     const mesh = useRef();
     const dummy = useMemo(() => new THREE.Object3D(), []);
     const center = useRef(new THREE.Vector3(0, 0, -10));
@@ -107,6 +113,12 @@ const SchoolOfFish = ({ count = 200, color }) => {
         const angle = Math.atan2(velX, velZ) + Math.PI; // Face direction
 
         if (mesh.current) {
+            // Sync Color
+            if (colorRef.current) {
+                mesh.current.material.color.copy(colorRef.current);
+                mesh.current.material.emissive.copy(colorRef.current);
+            }
+
             data.forEach((d, i) => {
                 // Fish position relative to center
                 // Add some individual wave motion
@@ -133,8 +145,8 @@ const SchoolOfFish = ({ count = 200, color }) => {
     return (
         <instancedMesh ref={mesh} args={[geometry, null, count]}>
             <meshStandardMaterial
-                color={color}
-                emissive={color}
+                color="#ffffff"
+                emissive="#ffffff"
                 emissiveIntensity={0.3}
                 roughness={0.3}
                 metalness={0.6}
@@ -144,7 +156,7 @@ const SchoolOfFish = ({ count = 200, color }) => {
 };
 
 // Procedural Whale using segments
-const Whale = ({ color }) => {
+const Whale = ({ colorRef }) => {
     const segments = 12;
     const bodyRefs = useRef(new Array(segments).fill(null));
 
@@ -206,6 +218,12 @@ const Whale = ({ color }) => {
             if (!mesh) return;
             mesh.position.copy(pathRef.current[i]);
 
+            // Sync Color
+            if (colorRef.current) {
+                mesh.material.color.copy(colorRef.current);
+                mesh.material.emissive.copy(colorRef.current);
+            }
+
             // Look at prev segment (or next) to orient
             if (i > 0) {
                  mesh.lookAt(pathRef.current[i-1]);
@@ -234,8 +252,8 @@ const Whale = ({ color }) => {
                  >
                     {/* Increased emissive intensity slightly */}
                     <meshStandardMaterial
-                        color={color}
-                        emissive={color}
+                        color="#ffffff"
+                        emissive="#ffffff"
                         emissiveIntensity={0.3}
                         roughness={0.4}
                         metalness={0.3}
@@ -247,7 +265,7 @@ const Whale = ({ color }) => {
 };
 
 // Ray: Flat, wide creature
-const Ray = ({ count = 3, color }) => {
+const Ray = ({ count = 3, colorRef }) => {
     const mesh = useRef();
     const dummy = useMemo(() => new THREE.Object3D(), []);
 
@@ -264,6 +282,12 @@ const Ray = ({ count = 3, color }) => {
     useFrame(({ clock }) => {
         const time = clock.getElapsedTime();
         if (mesh.current) {
+             // Sync Color
+             if (colorRef.current) {
+                mesh.current.material.color.copy(colorRef.current);
+                mesh.current.material.emissive.copy(colorRef.current);
+            }
+
             data.forEach((d, i) => {
                 // Glide
                 const z = d.position[2] + Math.cos(time * d.speed + d.phase) * 10;
@@ -290,8 +314,8 @@ const Ray = ({ count = 3, color }) => {
     return (
         <instancedMesh ref={mesh} args={[geometry, null, count]}>
             <meshStandardMaterial
-                color={color}
-                emissive={color}
+                color="#ffffff"
+                emissive="#ffffff"
                 emissiveIntensity={0.3}
                 roughness={0.5}
             />
@@ -300,13 +324,13 @@ const Ray = ({ count = 3, color }) => {
 }
 
 
-const Creatures = ({ types, color }) => {
+const Creatures = ({ types, colorRef }) => {
   return (
     <group>
-      {types.includes('jellyfish') && <Jellyfish count={15} color={color} />}
-      {types.includes('school') && <SchoolOfFish count={200} color={color} />}
-      {types.includes('whale') && <Whale color={color} />}
-      {types.includes('ray') && <Ray count={5} color={color} />}
+      {types.includes('jellyfish') && <Jellyfish count={15} colorRef={colorRef} />}
+      {types.includes('school') && <SchoolOfFish count={200} colorRef={colorRef} />}
+      {types.includes('whale') && <Whale colorRef={colorRef} />}
+      {types.includes('ray') && <Ray count={5} colorRef={colorRef} />}
     </group>
   );
 };

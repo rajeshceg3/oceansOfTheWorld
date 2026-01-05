@@ -2,7 +2,7 @@ import React, { useRef, useMemo, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
-const Particles = ({ color, count = 100 }) => {
+const Particles = ({ colorRef, count = 100 }) => {
   const mesh = useRef();
 
   const dummy = useMemo(() => new THREE.Object3D(), []);
@@ -23,6 +23,11 @@ const Particles = ({ color, count = 100 }) => {
   });
 
   useFrame(() => {
+    // Update color from ref
+    if (mesh.current && colorRef.current) {
+        mesh.current.material.color.copy(colorRef.current);
+    }
+
     particles.forEach((particle, i) => {
       let { t, factor, speed, x, y, z } = particle;
       t = particle.t += speed / 2;
@@ -43,10 +48,12 @@ const Particles = ({ color, count = 100 }) => {
     mesh.current.instanceMatrix.needsUpdate = true;
   });
 
+  // Initial color set via default prop or manual check if ref isn't ready, but usually ref is ready.
+  // We use white as initial fallback in JSX, but useFrame overrides it instantly.
   return (
     <instancedMesh ref={mesh} args={[null, null, count]}>
       <dodecahedronGeometry args={[0.2, 0]} />
-      <meshBasicMaterial color={color} transparent opacity={0.5} />
+      <meshBasicMaterial color="#ffffff" transparent opacity={0.5} />
     </instancedMesh>
   );
 };
