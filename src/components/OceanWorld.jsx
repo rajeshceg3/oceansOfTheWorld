@@ -1,6 +1,6 @@
 import React, { Suspense, useState, useCallback, lazy } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { Loader, Html, useProgress } from '@react-three/drei';
+import { Html, useProgress } from '@react-three/drei';
 import UIOverlay from './UIOverlay';
 import { OCEANS } from '../data/oceans';
 
@@ -42,7 +42,7 @@ const OceanWorld = () => {
             // We can also forcefully set the index here if needed, but
             // allowing the natural flow is better if it works.
             // This just unlocks the UI.
-        }, 5000);
+        }, 2000);
     }
   };
 
@@ -104,7 +104,6 @@ const OceanWorld = () => {
         currentOceanIndex={targetOceanIndex} // Update UI immediately for responsiveness
         onOceanChange={handleOceanChange}
       />
-      <Loader />
     </>
   );
 };

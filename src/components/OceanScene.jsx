@@ -5,13 +5,14 @@ import * as THREE from 'three';
 import Creatures from './Creatures';
 import Particles from './Particles';
 
-const LightShafts = ({ color }) => {
+const LightShafts = ({ colorRef }) => {
   const mesh = useRef();
 
+  // Initialize with white or a default; the effect will update it immediately
   const uniforms = useMemo(() => ({
-    uColor: { value: new THREE.Color(color) },
+    uColor: { value: new THREE.Color('#ffffff') },
     uTime: { value: 0 }
-  }), [color]);
+  }), []);
 
   const shaderMaterial = useMemo(() => new THREE.ShaderMaterial({
     uniforms: uniforms,
@@ -46,13 +47,13 @@ const LightShafts = ({ color }) => {
     blending: THREE.AdditiveBlending,
   }), [uniforms]);
 
-  useEffect(() => {
-    uniforms.uColor.value.set(color);
-  }, [color, uniforms]);
-
+  // Sync color from ref every frame for smooth transition
   useFrame((state) => {
     // eslint-disable-next-line react-hooks/immutability
     uniforms.uTime.value = state.clock.getElapsedTime() * 0.2;
+    if (colorRef.current) {
+        uniforms.uColor.value.copy(colorRef.current);
+    }
     if (mesh.current) {
         mesh.current.rotation.y += 0.0005;
     }
@@ -68,13 +69,13 @@ const LightShafts = ({ color }) => {
   );
 };
 
-const CausticsPlane = ({ color }) => {
+const CausticsPlane = ({ colorRef }) => {
     const mesh = useRef();
 
     const uniforms = useMemo(() => ({
         uTime: { value: 0 },
-        uColor: { value: new THREE.Color(color) }
-    }), [color]);
+        uColor: { value: new THREE.Color('#ffffff') }
+    }), []);
 
     const material = useMemo(() => new THREE.ShaderMaterial({
         uniforms: uniforms,
@@ -134,13 +135,12 @@ const CausticsPlane = ({ color }) => {
         depthWrite: false,
     }), [uniforms]);
 
-    useEffect(() => {
-        uniforms.uColor.value.set(color);
-    }, [color, uniforms]);
-
     useFrame((state) => {
         // eslint-disable-next-line react-hooks/immutability
         uniforms.uTime.value = state.clock.getElapsedTime();
+        if (colorRef.current) {
+            uniforms.uColor.value.copy(colorRef.current);
+        }
     });
 
     return (
@@ -158,10 +158,21 @@ const OceanScene = ({ ocean, onTransitionComplete }) => {
   const creaturesRef = useRef();
   const timelineRef = useRef(null);
 
+  // Light Refs
+  const spotLightRef = useRef();
+  const ambientLightRef = useRef();
+  const pointLightRef = useRef();
+  const directionalLightRef = useRef();
+
+  // Shared Color Refs for children (Mutable)
+  const lightColorRef = useRef(new THREE.Color(ocean.colors.light));
+
   const [renderedOcean, setRenderedOcean] = useState(ocean);
   const [initialColors] = useState({
       fog: ocean.colors.fog,
-      background: ocean.colors.background
+      background: ocean.colors.background,
+      light: ocean.colors.light,
+      water: ocean.colors.water
   });
 
   // Handle Transitions with GSAP
@@ -182,6 +193,7 @@ const OceanScene = ({ ocean, onTransitionComplete }) => {
       timelineRef.current = tl;
 
       // --- Environment Animation (Parallel) ---
+      // Fog & Background
       tl.to(fogRef.current, {
         density: 0.012,
         duration: duration,
@@ -202,6 +214,43 @@ const OceanScene = ({ ocean, onTransitionComplete }) => {
         b: new THREE.Color(ocean.colors.background).b,
         duration: duration,
         ease: "power2.inOut"
+      }, 0);
+
+      // --- Lights Animation ---
+      // Water Color Lights (Ambient, Directional)
+      const targetWaterColor = new THREE.Color(ocean.colors.water);
+      if (ambientLightRef.current) {
+          tl.to(ambientLightRef.current.color, {
+              r: targetWaterColor.r, g: targetWaterColor.g, b: targetWaterColor.b,
+              duration: duration, ease: "power2.inOut"
+          }, 0);
+      }
+      if (directionalLightRef.current) {
+          tl.to(directionalLightRef.current.color, {
+              r: targetWaterColor.r, g: targetWaterColor.g, b: targetWaterColor.b,
+              duration: duration, ease: "power2.inOut"
+          }, 0);
+      }
+
+      // Light Color Lights (Spot, Point) & Shared Ref
+      const targetLightColor = new THREE.Color(ocean.colors.light);
+      if (spotLightRef.current) {
+          tl.to(spotLightRef.current.color, {
+              r: targetLightColor.r, g: targetLightColor.g, b: targetLightColor.b,
+              duration: duration, ease: "power2.inOut"
+          }, 0);
+      }
+      if (pointLightRef.current) {
+          tl.to(pointLightRef.current.color, {
+              r: targetLightColor.r, g: targetLightColor.g, b: targetLightColor.b,
+              duration: duration, ease: "power2.inOut"
+          }, 0);
+      }
+
+      // Animate the shared reference for children components
+      tl.to(lightColorRef.current, {
+          r: targetLightColor.r, g: targetLightColor.g, b: targetLightColor.b,
+          duration: duration, ease: "power2.inOut"
       }, 0);
 
 
@@ -270,25 +319,26 @@ const OceanScene = ({ ocean, onTransitionComplete }) => {
       <group>
         {/* Disabled castShadow to prevent WebGL feedback loops and performance degradation */}
         <spotLight
+          ref={spotLightRef}
           position={[0, 20, 0]}
           angle={0.6}
           penumbra={1}
           intensity={1.0}
-          color={ocean.colors.light}
+          color={initialColors.light}
         />
 
-        <ambientLight intensity={0.6} color={ocean.colors.water} />
+        <ambientLight ref={ambientLightRef} intensity={0.6} color={initialColors.water} />
 
-        <pointLight position={[0, -10, -10]} intensity={0.8} color={ocean.colors.light} distance={30} />
+        <pointLight ref={pointLightRef} position={[0, -10, -10]} intensity={0.8} color={initialColors.light} distance={30} />
 
-        <directionalLight position={[0, -20, 0]} intensity={0.8} color={ocean.colors.water} />
+        <directionalLight ref={directionalLightRef} position={[0, -20, 0]} intensity={0.8} color={initialColors.water} />
 
-        <LightShafts color={ocean.colors.light} />
-        <CausticsPlane color={ocean.colors.light} />
+        <LightShafts colorRef={lightColorRef} />
+        <CausticsPlane colorRef={lightColorRef} />
 
-        <Particles color={ocean.colors.light} count={300} />
+        <Particles colorRef={lightColorRef} count={300} />
         <group ref={creaturesRef}>
-           <Creatures types={renderedOcean.creatures} color={ocean.colors.light} />
+           <Creatures types={renderedOcean.creatures} colorRef={lightColorRef} />
         </group>
 
       </group>
