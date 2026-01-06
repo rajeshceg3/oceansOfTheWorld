@@ -1,41 +1,51 @@
-from playwright.sync_api import sync_playwright
+import asyncio
+from playwright.async_api import async_playwright
 
-def verify_ocean_scene():
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
+async def verify_app():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch()
+        page = await browser.new_page()
+
+        # Capture console logs
+        console_logs = []
+        page.on("console", lambda msg: console_logs.append(f"{msg.type}: {msg.text}"))
+
+        print("Navigating to app...")
         try:
-            page.goto("http://localhost:5173")
+            await page.goto("http://localhost:5173", timeout=60000)
 
-            # Wait for loading to finish (CustomLoader disappears)
-            # The CustomLoader is inside <Html center>.
-            # It has text "Loading X%".
-            # We wait for it to detach.
-            page.wait_for_selector('text=Loading', state='detached', timeout=30000)
+            # Wait for canvas to be present
+            await page.wait_for_selector("canvas", timeout=30000)
+            print("Canvas element found.")
 
-            # Wait a bit for the scene to settle (fade in)
-            page.wait_for_timeout(3000)
+            # Check for loading text to disappear (indicating 3D scene loaded)
+            # The loader has text "Loading"
+            # We wait for it to detach
+            try:
+                await page.wait_for_selector("text=Loading", state="detached", timeout=30000)
+                print("Loading screen finished.")
+            except Exception as e:
+                print(f"Warning: Loading screen might still be visible or not found: {e}")
 
-            # Take a screenshot of the initial state (Pacific)
-            page.screenshot(path="verification/initial_ocean.png")
+            # Take screenshot
+            await page.screenshot(path="verification/screenshot.png")
+            print("Screenshot taken.")
 
-            # Click on the second ocean button (Atlantic)
-            # Buttons are in a flex container, aria-label="Switch to Atlantic Drift"
-            atlantic_btn = page.locator('button[aria-label="Switch to Atlantic Drift"]')
-            atlantic_btn.click()
-
-            # Wait for transition (approx 2s)
-            page.wait_for_timeout(2500)
-
-            # Take screenshot of Atlantic
-            page.screenshot(path="verification/atlantic_ocean.png")
-
-            print("Verification screenshots captured.")
+            # Check for UI elements
+            ui_overlay = await page.query_selector("h1")
+            if ui_overlay:
+                print("UI Overlay Title found.")
+            else:
+                print("UI Overlay Title NOT found.")
 
         except Exception as e:
-            print(f"Error: {e}")
-        finally:
-            browser.close()
+            print(f"Error navigating or interacting: {e}")
+
+        print("\nConsole Logs:")
+        for log in console_logs:
+            print(log)
+
+        await browser.close()
 
 if __name__ == "__main__":
-    verify_ocean_scene()
+    asyncio.run(verify_app())

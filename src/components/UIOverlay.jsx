@@ -54,6 +54,7 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange }) => {
       {/* Title / Description - Always fades when idle */}
       <div
         className={`absolute bottom-32 left-0 w-full text-center pointer-events-none transition-all duration-[1500ms] motion-reduce:transition-none ease-in-out ${isIdle ? 'opacity-0 translate-y-4 blur-sm' : 'opacity-100 translate-y-0 blur-0'}`}
+        aria-hidden={isIdle}
       >
         <h1 className="text-4xl md:text-6xl font-extralight tracking-[0.3em] text-white/95 uppercase drop-shadow-2xl font-display">
           {oceans[currentOceanIndex].name}
@@ -67,12 +68,14 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange }) => {
       {/* Navigation - Fades when idle, reappears on interaction */}
       <div
         className={`absolute bottom-10 left-0 w-full flex justify-center z-10 pointer-events-none transition-all duration-[1500ms] motion-reduce:transition-none ease-out ${isIdle ? 'opacity-0 translate-y-8' : 'opacity-100 translate-y-0'}`}
+        aria-hidden={isIdle}
       >
-        <div className="flex space-x-8 bg-black/10 backdrop-blur-md border border-white/10 px-8 py-4 rounded-full pointer-events-auto transition-all duration-500 hover:bg-black/20 hover:border-white/20 shadow-2xl">
+        <div className={`flex space-x-8 bg-black/10 backdrop-blur-md border border-white/10 px-8 py-4 rounded-full pointer-events-auto transition-all duration-500 hover:bg-black/20 hover:border-white/20 shadow-2xl ${isIdle ? 'pointer-events-none' : ''}`}>
           {oceans.map((ocean, index) => (
             <button
               key={ocean.id}
               onClick={() => onOceanChange(index)}
+              disabled={isIdle}
               className={`
                 group relative flex flex-col items-center justify-center w-4 h-4 transition-all duration-500 outline-none focus-visible:ring-2 focus-visible:ring-white/50 rounded-full
                 ${index === currentOceanIndex ? 'scale-125 opacity-100' : 'opacity-40 hover:opacity-100'}
@@ -104,9 +107,11 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange }) => {
       {/* Sound Toggle */}
        <button
          onClick={() => setIsSoundOn(!isSoundOn)}
-         className={`absolute top-8 left-8 text-left pointer-events-auto cursor-pointer transition-all duration-[2000ms] outline-none focus-visible:ring-2 focus-visible:ring-white/50 rounded p-1 ${isIdle ? 'opacity-0 -translate-y-4' : 'opacity-80 translate-y-0'}`}
+         disabled={isIdle}
+         className={`absolute top-8 left-8 text-left pointer-events-auto cursor-pointer transition-all duration-[2000ms] outline-none focus-visible:ring-2 focus-visible:ring-white/50 rounded p-1 ${isIdle ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-80 translate-y-0'}`}
          aria-label={isSoundOn ? "Mute sound" : "Enable sound"}
          title={isSoundOn ? "Mute" : "Unmute"}
+         aria-hidden={isIdle}
        >
          <div className="flex items-center space-x-2">
             {isSoundOn ? (

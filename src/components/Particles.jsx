@@ -53,7 +53,15 @@ const Particles = ({ colorRef, count = 100 }) => {
   return (
     <instancedMesh ref={mesh} args={[null, null, count]}>
       <dodecahedronGeometry args={[0.2, 0]} />
-      <meshBasicMaterial color="#ffffff" transparent opacity={0.5} />
+      <meshStandardMaterial
+        color="#ffffff"
+        transparent
+        opacity={0.6}
+        roughness={0.2}
+        metalness={0.1}
+        emissive="#ffffff"
+        emissiveIntensity={0.2}
+      />
     </instancedMesh>
   );
 };
