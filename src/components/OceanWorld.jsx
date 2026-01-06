@@ -36,13 +36,14 @@ const OceanWorld = () => {
         setIsTransitioning(true);
 
         // Safety fallback: ensure we don't get stuck in transition state
-        // if the GSAP callback fails to fire for some reason
+        // if the GSAP callback fails to fire for some reason.
+        // Animation is 1.5s, so 2500ms gives plenty of buffer.
         setTimeout(() => {
             setIsTransitioning(false);
             // We can also forcefully set the index here if needed, but
             // allowing the natural flow is better if it works.
             // This just unlocks the UI.
-        }, 2000);
+        }, 2500);
     }
   };
 
