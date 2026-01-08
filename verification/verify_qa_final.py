@@ -6,29 +6,23 @@ def verify_app():
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
 
-        # Navigate to the app (assuming it's running locally)
         page.goto("http://localhost:5173")
 
-        # Wait for loading to finish
         try:
             page.wait_for_selector('text=Loading', state='detached', timeout=10000)
             print("Loading finished.")
         except:
             print("Loading indicator did not disappear in time.")
 
-        # Check for console errors
-        page.on("console", lambda msg: print(f"Console {msg.type}: {msg.text}"))
-
-        # Take screenshot
-        page.screenshot(path="verification/screenshot_initial.png")
+        page.screenshot(path="verification/screenshot_final.png")
         print("Screenshot taken.")
 
-        # Find 3D canvas
-        canvas = page.locator("canvas[aria-label='3D Ocean View']")
+        # Check Canvas Container
+        canvas = page.locator("div[aria-label='3D Ocean View']")
         if canvas.count() > 0:
-            print("Canvas found.")
+            print("Canvas container found.")
         else:
-            print("Canvas NOT found.")
+            print("Canvas container NOT found.")
 
         browser.close()
 

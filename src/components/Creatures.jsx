@@ -219,9 +219,10 @@ const Whale = ({ colorRef }) => {
             mesh.position.copy(pathRef.current[i]);
 
             // Sync Color
-            if (colorRef.current) {
-                mesh.material.color.copy(colorRef.current);
-                mesh.material.emissive.copy(colorRef.current);
+            if (colorRef.current && i === 0) {
+                // Since material is shared, we only need to update it once per frame
+                material.color.copy(colorRef.current);
+                material.emissive.copy(colorRef.current);
             }
 
             // Look at prev segment (or next) to orient
@@ -241,6 +242,15 @@ const Whale = ({ colorRef }) => {
         });
     });
 
+    // Memoize material to reuse across segments and avoid recreation on re-renders
+    const material = useMemo(() => new THREE.MeshStandardMaterial({
+        color: "#ffffff",
+        emissive: "#ffffff",
+        emissiveIntensity: 0.3,
+        roughness: 0.4,
+        metalness: 0.3
+    }), []);
+
     return (
         <group>
              {new Array(segments).fill().map((_, i) => (
@@ -249,16 +259,8 @@ const Whale = ({ colorRef }) => {
                     ref={el => bodyRefs.current[i] = el}
                     position={[0,0,0]} // Initial
                     geometry={geometry}
-                 >
-                    {/* Increased emissive intensity slightly */}
-                    <meshStandardMaterial
-                        color="#ffffff"
-                        emissive="#ffffff"
-                        emissiveIntensity={0.3}
-                        roughness={0.4}
-                        metalness={0.3}
-                    />
-                 </mesh>
+                    material={material}
+                 />
              ))}
         </group>
     );

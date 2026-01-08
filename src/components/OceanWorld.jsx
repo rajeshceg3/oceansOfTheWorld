@@ -40,9 +40,7 @@ const OceanWorld = () => {
         // Animation is 1.5s, so 2500ms gives plenty of buffer.
         setTimeout(() => {
             setIsTransitioning(false);
-            // We can also forcefully set the index here if needed, but
-            // allowing the natural flow is better if it works.
-            // This just unlocks the UI.
+            setCurrentOceanIndex(index);
         }, 2500);
     }
   };
