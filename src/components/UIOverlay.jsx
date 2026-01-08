@@ -110,10 +110,11 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange }) => {
          disabled={isIdle}
          className={`absolute top-8 left-8 text-left pointer-events-auto cursor-pointer transition-all duration-[2000ms] outline-none focus-visible:ring-2 focus-visible:ring-white/50 rounded p-1 ${isIdle ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-80 translate-y-0'}`}
          aria-label={isSoundOn ? "Mute sound" : "Enable sound"}
+         aria-pressed={isSoundOn}
          title={isSoundOn ? "Mute" : "Unmute"}
          aria-hidden={isIdle}
        >
-         <div className="flex items-center space-x-2">
+         <div className="flex items-center space-x-2" aria-hidden="true">
             {isSoundOn ? (
                  <>
                     <div className="w-1 h-4 bg-white animate-[pulse_1s_ease-in-out_infinite]"></div>
