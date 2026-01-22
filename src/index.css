@@ -1,20 +1,25 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  --font-display: 'Montserrat', sans-serif;
+  --font-body: 'Lato', sans-serif;
+  --font-sans: 'Lato', sans-serif;
+  --color-ocean-ui: rgba(255, 255, 255, 0.1);
+}
 
 body {
   margin: 0;
   padding: 0;
   overflow: hidden;
   background-color: #000;
-  font-family: 'Lato', sans-serif; /* Default body font */
+  font-family: var(--font-body); /* Default body font */
   user-select: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'Montserrat', sans-serif;
+  font-family: var(--font-display);
 }
 
 canvas {
