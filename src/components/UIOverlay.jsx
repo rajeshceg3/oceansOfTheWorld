@@ -1,20 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Volume2, VolumeX } from 'lucide-react';
 import { useOceanSound } from '../hooks/useOceanSound';
 
-const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange }) => {
+const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange, isLoading }) => {
   const [isIdle, setIsIdle] = useState(false);
-  // Lazy init ref using a function to avoid Date.now() in render
-  // Although useRef(initialValue) executes initialValue, we can pass null and init in effect or use lazy pattern if strict.
-  // Actually, useRef(Date.now()) calls Date.now() during render.
-  // The linter is correct.
-  // Correct pattern: useRef(null) and init in effect or lazily in event handler.
   const lastActivityRef = useRef(null);
-  const [isSoundOn, setIsSoundOn] = useState(false); // State for sound toggle
+  const [isSoundOn, setIsSoundOn] = useState(false);
 
   useOceanSound(isSoundOn);
 
   useEffect(() => {
-    // Init on mount if null
     if (lastActivityRef.current === null) {
       lastActivityRef.current = Date.now();
     }
@@ -24,15 +19,13 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange }) => {
       setIsIdle(false);
     };
 
-    // Optimization: we could throttle this, but React's state bail-out and ref update are fast enough.
-    // The main fix is ensuring this effect runs only once.
     window.addEventListener('mousemove', handleActivity);
     window.addEventListener('touchstart', handleActivity);
     window.addEventListener('click', handleActivity);
     window.addEventListener('keydown', handleActivity);
 
     const interval = setInterval(() => {
-      if (lastActivityRef.current && Date.now() - lastActivityRef.current > 8000) { // 8 seconds of inactivity
+      if (lastActivityRef.current && Date.now() - lastActivityRef.current > 8000) {
         setIsIdle(true);
       }
     }, 1000);
@@ -44,52 +37,82 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange }) => {
       window.removeEventListener('keydown', handleActivity);
       clearInterval(interval);
     };
-  }, []); // Empty dependency array = stable listeners
+  }, []);
+
+  const shouldHide = isIdle || isLoading;
 
   return (
     <>
-      {/* Gradient for contrast */}
-      <div className={`absolute bottom-0 left-0 w-full h-[50vh] bg-gradient-to-t from-black/60 via-black/20 to-transparent pointer-events-none transition-opacity duration-[1500ms] ${isIdle ? 'opacity-0' : 'opacity-100'}`} />
-
-      {/* Title / Description - Always fades when idle */}
+      {/* Cinematic Gradient Overlay */}
       <div
-        className={`absolute bottom-32 left-0 w-full text-center pointer-events-none transition-all duration-[1500ms] motion-reduce:transition-none ease-in-out ${isIdle ? 'opacity-0 translate-y-4 blur-sm' : 'opacity-100 translate-y-0 blur-0'}`}
-        aria-hidden={isIdle}
+        className={`absolute bottom-0 left-0 w-full h-[60vh] bg-gradient-to-t from-black/80 via-black/40 to-transparent pointer-events-none transition-opacity duration-[2000ms] ease-in-out ${shouldHide ? 'opacity-0' : 'opacity-100'}`}
+      />
+
+      {/* Main Title & Description */}
+      <div
+        className={`absolute bottom-24 md:bottom-32 left-0 w-full text-center pointer-events-none transition-all duration-[1500ms] motion-reduce:transition-none ease-in-out ${shouldHide ? 'opacity-0 translate-y-8 blur-md' : 'opacity-100 translate-y-0 blur-0'}`}
+        aria-hidden={shouldHide}
       >
-        <h1 className="text-4xl md:text-6xl font-extralight tracking-[0.3em] text-white/95 uppercase drop-shadow-2xl font-display">
+        <h1 className="text-4xl md:text-7xl font-thin tracking-[0.25em] text-white/95 uppercase drop-shadow-2xl font-display mb-4 md:mb-6">
           {oceans[currentOceanIndex].name}
         </h1>
-        <div className="w-16 h-[1px] bg-white/40 mx-auto my-4 shadow-sm"></div>
-        <p className="text-sm md:text-base font-light text-white/90 tracking-widest font-sans max-w-md mx-auto drop-shadow-md">
+
+        <div className="flex items-center justify-center space-x-4 mb-4 md:mb-6 opacity-60">
+            <div className="w-8 md:w-12 h-[1px] bg-white"></div>
+            <div className="w-1 h-1 bg-white rounded-full"></div>
+            <div className="w-8 md:w-12 h-[1px] bg-white"></div>
+        </div>
+
+        <p className="text-xs md:text-sm font-light text-white/80 tracking-[0.15em] font-sans max-w-[280px] md:max-w-xl mx-auto drop-shadow-lg leading-relaxed">
           {oceans[currentOceanIndex].description}
         </p>
       </div>
 
-      {/* Navigation - Fades when idle, reappears on interaction */}
+      {/* Navigation Controls */}
       <div
-        className={`absolute bottom-10 left-0 w-full flex justify-center z-10 pointer-events-none transition-all duration-[1500ms] motion-reduce:transition-none ease-out ${isIdle ? 'opacity-0 translate-y-8' : 'opacity-100 translate-y-0'}`}
-        aria-hidden={isIdle}
+        className={`absolute bottom-6 md:bottom-12 left-0 w-full flex justify-center z-10 pointer-events-none transition-all duration-[1500ms] ease-out ${shouldHide ? 'opacity-0 translate-y-12' : 'opacity-100 translate-y-0'}`}
+        aria-hidden={shouldHide}
       >
-        <div className={`flex space-x-8 bg-black/10 backdrop-blur-md border border-white/10 px-8 py-4 rounded-full pointer-events-auto transition-all duration-500 hover:bg-black/20 hover:border-white/20 shadow-2xl ${isIdle ? 'pointer-events-none' : ''}`}>
+        <div className={`
+            flex items-center space-x-6 md:space-x-8
+            bg-white/5 backdrop-blur-xl border border-white/10
+            px-6 py-3 md:px-10 md:py-4 rounded-full
+            pointer-events-auto transition-all duration-500
+            hover:bg-white/10 hover:border-white/20 hover:shadow-[0_0_30px_rgba(255,255,255,0.1)]
+            shadow-2xl ${shouldHide ? 'pointer-events-none' : ''}
+        `}>
           {oceans.map((ocean, index) => (
             <button
               key={ocean.id}
               onClick={() => onOceanChange(index)}
-              disabled={isIdle}
+              disabled={shouldHide}
               className={`
-                group relative flex flex-col items-center justify-center w-4 h-4 transition-all duration-500 outline-none focus-visible:ring-2 focus-visible:ring-white/50 rounded-full
-                ${index === currentOceanIndex ? 'scale-125 opacity-100' : 'opacity-40 hover:opacity-100'}
+                group relative flex flex-col items-center justify-center w-8 h-8 md:w-6 md:h-6
+                transition-all duration-500 outline-none rounded-full
+                focus-visible:ring-2 focus-visible:ring-white/50
               `}
               aria-label={`Switch to ${ocean.name}`}
             >
+              {/* Active Indicator & Hover Glow */}
               <div
                 className={`
-                  w-2 h-2 rounded-full transition-all duration-500
-                  ${index === currentOceanIndex ? 'bg-white shadow-[0_0_15px_rgba(255,255,255,1)] w-3 h-3' : 'bg-white/60 group-hover:bg-white'}
+                  absolute w-2 h-2 rounded-full transition-all duration-700 ease-out
+                  ${index === currentOceanIndex
+                    ? 'bg-white shadow-[0_0_20px_rgba(255,255,255,1)] w-3 h-3 md:w-2.5 md:h-2.5 opacity-100'
+                    : 'bg-white/40 group-hover:bg-white group-hover:shadow-[0_0_10px_rgba(255,255,255,0.8)] opacity-60'
+                  }
                 `}
               />
-              {/* Tooltip on hover */}
-              <span className="absolute -top-10 text-[10px] tracking-widest text-white/90 opacity-0 group-hover:opacity-100 transition-all duration-500 -translate-y-2 group-hover:translate-y-0 uppercase whitespace-nowrap bg-black/20 px-2 py-1 rounded backdrop-blur-sm pointer-events-none">
+
+              {/* Tooltip - Only visible on hover */}
+              <span className={`
+                absolute -top-12 md:-top-14
+                text-[10px] md:text-xs font-light tracking-[0.2em] uppercase
+                text-white bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-sm border border-white/5
+                transition-all duration-300 transform origin-bottom
+                opacity-0 translate-y-2 scale-90 group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100
+                whitespace-nowrap pointer-events-none shadow-xl
+              `}>
                 {ocean.name}
               </span>
             </button>
@@ -97,39 +120,36 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange }) => {
         </div>
       </div>
 
-      {/* Subtle Corner Info */}
-      <div className={`absolute top-8 right-8 text-right pointer-events-none transition-all duration-[2000ms] ${isIdle ? 'opacity-0 -translate-y-4' : 'opacity-100 translate-y-0'}`}>
-         <p className="text-[10px] font-light text-white tracking-[0.3em] uppercase opacity-90">
-            Interactive Experience
+      {/* Top Right Info */}
+      <div className={`absolute top-6 right-6 md:top-10 md:right-10 text-right pointer-events-none transition-all duration-[2000ms] ${shouldHide ? 'opacity-0 -translate-y-4' : 'opacity-100 translate-y-0'}`}>
+         <p className="text-[9px] md:text-[10px] font-thin text-white/70 tracking-[0.3em] uppercase">
+            Immersion Mode
          </p>
       </div>
 
-      {/* Sound Toggle */}
+      {/* Sound Control */}
        <button
          onClick={() => setIsSoundOn(!isSoundOn)}
-         disabled={isIdle}
-         className={`absolute top-8 left-8 text-left pointer-events-auto cursor-pointer transition-all duration-[2000ms] outline-none focus-visible:ring-2 focus-visible:ring-white/50 rounded p-1 ${isIdle ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-80 translate-y-0'}`}
+         disabled={shouldHide}
+         className={`
+            absolute top-6 left-6 md:top-10 md:left-10
+            text-white/80 hover:text-white
+            pointer-events-auto cursor-pointer
+            transition-all duration-[2000ms]
+            outline-none focus-visible:ring-2 focus-visible:ring-white/50 rounded-full p-2
+            hover:bg-white/5 backdrop-blur-sm
+            ${shouldHide ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'}
+         `}
          aria-label={isSoundOn ? "Mute sound" : "Enable sound"}
          aria-pressed={isSoundOn}
          title={isSoundOn ? "Mute" : "Unmute"}
-         aria-hidden={isIdle}
+         aria-hidden={shouldHide}
        >
-         <div className="flex items-center space-x-2" aria-hidden="true">
-            {isSoundOn ? (
-                 <>
-                    <div className="w-1 h-4 bg-white animate-[pulse_1s_ease-in-out_infinite]"></div>
-                    <div className="w-1 h-6 bg-white animate-[pulse_1.5s_ease-in-out_infinite] delay-75"></div>
-                    <div className="w-1 h-3 bg-white animate-[pulse_0.8s_ease-in-out_infinite] delay-150"></div>
-                 </>
-            ) : (
-                <>
-                    <div className="w-1 h-4 bg-white/30"></div>
-                    <div className="w-1 h-6 bg-white/30"></div>
-                    <div className="w-1 h-3 bg-white/30"></div>
-                    <div className="absolute w-full h-[1px] bg-white top-1/2 -rotate-45"></div>
-                </>
-            )}
-         </div>
+         {isSoundOn ? (
+            <Volume2 size={24} strokeWidth={1} className="drop-shadow-md" />
+         ) : (
+            <VolumeX size={24} strokeWidth={1} className="opacity-70 drop-shadow-md" />
+         )}
       </button>
     </>
   );
