@@ -1,34 +1,25 @@
-import React, { Suspense, useState, useCallback, lazy } from 'react';
+import React, { Suspense, useState, useCallback, lazy, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { Html, useProgress } from '@react-three/drei';
+import { useProgress } from '@react-three/drei';
 import UIOverlay from './UIOverlay';
+import CustomLoader from './CustomLoader';
 import { OCEANS } from '../data/oceans';
 
 const OceanScene = lazy(() => import('./OceanScene'));
 
-const CustomLoader = () => {
-  const { progress } = useProgress();
-  return (
-    <Html center>
-      <div className="flex flex-col items-center justify-center pointer-events-none transition-opacity duration-500">
-        <div className="w-24 h-[1px] bg-white/20 mb-4 relative overflow-hidden">
-            <div
-                className="absolute top-0 left-0 h-full bg-white transition-all duration-300 ease-out"
-                style={{ width: `${progress}%` }}
-            />
-        </div>
-        <div className="text-xs font-light tracking-[0.3em] text-white/60 uppercase">
-          Loading {Math.round(progress)}%
-        </div>
-      </div>
-    </Html>
-  );
+const LoadingListener = ({ onLoadingChange }) => {
+  const { active } = useProgress();
+  useEffect(() => {
+    onLoadingChange(active);
+  }, [active, onLoadingChange]);
+  return null;
 };
 
 const OceanWorld = () => {
   const [currentOceanIndex, setCurrentOceanIndex] = useState(0);
   const [targetOceanIndex, setTargetOceanIndex] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   const handleOceanChange = (index) => {
     if (index !== currentOceanIndex && !isTransitioning) {
@@ -96,12 +87,14 @@ const OceanWorld = () => {
                 ocean={activeOcean}
                 onTransitionComplete={handleTransitionComplete}
             />
+            <LoadingListener onLoadingChange={setIsLoading} />
         </Suspense>
       </Canvas>
       <UIOverlay
         oceans={OCEANS}
         currentOceanIndex={targetOceanIndex} // Update UI immediately for responsiveness
         onOceanChange={handleOceanChange}
+        isLoading={isLoading}
       />
     </>
   );
