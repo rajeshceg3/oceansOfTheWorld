@@ -17,6 +17,26 @@ vi.mock('../hooks/useOceanSound', () => ({
   useOceanSound: vi.fn(),
 }));
 
+// Mock @react-three/drei useProgress to simulate loading complete
+vi.mock('@react-three/drei', async () => {
+    const actual = await vi.importActual('@react-three/drei');
+    return {
+        ...actual,
+        useProgress: () => ({ active: false, progress: 100 }),
+        Html: ({ children }) => <div data-testid="html-mock">{children}</div>,
+    };
+});
+
+// Mock Canvas to render children directly so LoadingListener runs
+vi.mock('@react-three/fiber', async () => {
+    const actual = await vi.importActual('@react-three/fiber');
+    return {
+        ...actual,
+        Canvas: ({ children, ...props }) => <div {...props} data-testid="canvas-mock">{children}</div>,
+    };
+});
+
+
 describe('OceanWorld', () => {
   it('renders without crashing', async () => {
     // We need to wait for Suspense.
@@ -58,7 +78,9 @@ describe('OceanWorld', () => {
       });
 
       // Check initial state (Pacific)
-      expect(screen.getByRole('heading', { name: /Pacific Serenity/i })).toBeInTheDocument();
+      await waitFor(() => {
+          expect(screen.getByRole('heading', { name: /Pacific Serenity/i })).toBeInTheDocument();
+      });
 
       // Click next ocean
       const buttons = screen.getAllByRole('button', { name: /Switch to/i });

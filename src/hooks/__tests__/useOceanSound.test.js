@@ -9,6 +9,7 @@ describe('useOceanSound', () => {
   let oscillatorMock;
   let bufferSourceMock;
   let biquadFilterMock;
+  let convolverMock;
 
   beforeEach(() => {
     // Mock AudioContext and related nodes
@@ -23,7 +24,7 @@ describe('useOceanSound', () => {
 
     oscillatorMock = {
         type: 'sine',
-        frequency: { value: 0 },
+        frequency: { value: 0, setTargetAtTime: vi.fn() },
         connect: vi.fn(),
         start: vi.fn(),
         stop: vi.fn(),
@@ -39,8 +40,13 @@ describe('useOceanSound', () => {
 
     biquadFilterMock = {
         type: '',
-        frequency: { value: 0 },
+        frequency: { value: 0, setTargetAtTime: vi.fn() },
         Q: { value: 0 },
+        connect: vi.fn(),
+    };
+
+    convolverMock = {
+        buffer: null,
         connect: vi.fn(),
     };
 
@@ -51,6 +57,7 @@ describe('useOceanSound', () => {
             this.createOscillator = vi.fn(() => oscillatorMock);
             this.createBufferSource = vi.fn(() => bufferSourceMock);
             this.createBiquadFilter = vi.fn(() => biquadFilterMock);
+            this.createConvolver = vi.fn(() => convolverMock);
             this.createBuffer = vi.fn(() => ({
                 getChannelData: vi.fn(() => new Float32Array(4000))
             }));
@@ -94,6 +101,7 @@ describe('useOceanSound', () => {
             this.createOscillator = vi.fn(() => oscillatorMock);
             this.createBufferSource = vi.fn(() => bufferSourceMock);
             this.createBiquadFilter = vi.fn(() => biquadFilterMock);
+            this.createConvolver = vi.fn(() => convolverMock);
             this.createBuffer = vi.fn(() => ({ getChannelData: vi.fn(() => new Float32Array(4000)) }));
             this.sampleRate = 1000;
             this.currentTime = 0;
@@ -116,7 +124,7 @@ describe('useOceanSound', () => {
       // We need to wait or ensure effect ran.
       // renderHook runs effects.
       // Check arguments.
-      expect(gainNodeMock.gain.setTargetAtTime).toHaveBeenCalledWith(0.3, 0, 2);
+      expect(gainNodeMock.gain.setTargetAtTime).toHaveBeenCalledWith(1, 0, 2);
   });
 
   it('should fade out when sound is turned off', () => {
