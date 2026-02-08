@@ -7,7 +7,7 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange, isLoading }) => {
   const lastActivityRef = useRef(null);
   const [isSoundOn, setIsSoundOn] = useState(false);
 
-  useOceanSound(isSoundOn);
+  useOceanSound(isSoundOn, currentOceanIndex);
 
   useEffect(() => {
     if (lastActivityRef.current === null) {

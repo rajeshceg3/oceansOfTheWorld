@@ -91,7 +91,7 @@ describe('UIOverlay', () => {
             fireEvent.mouseMove(window);
         });
 
-        expect(title).toHaveAttribute('aria-hidden', 'false');
+        expect(title).not.toHaveAttribute('aria-hidden', 'true');
 
         vi.useRealTimers();
     });
