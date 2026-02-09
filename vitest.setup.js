@@ -43,3 +43,57 @@ HTMLCanvasElement.prototype.getContext = () => {
         clip: vi.fn(),
     };
 };
+
+// Mock AudioContext
+window.AudioContext = class AudioContext {
+    constructor() {
+        this.state = 'suspended';
+        this.currentTime = 0;
+        this.destination = {};
+        this.sampleRate = 44100; // Required for buffer creation
+        this.createGain = () => ({
+            gain: { value: 0, setTargetAtTime: vi.fn(), cancelScheduledValues: vi.fn() },
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+        });
+        this.createOscillator = () => ({
+            frequency: { value: 0, setTargetAtTime: vi.fn() },
+            type: 'sine',
+            start: vi.fn(),
+            stop: vi.fn(),
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+        });
+        this.createBiquadFilter = () => ({
+            frequency: { value: 0, setTargetAtTime: vi.fn() },
+            Q: { value: 0 },
+            type: 'lowpass',
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+        });
+        this.createBufferSource = () => ({
+            buffer: null,
+            loop: false,
+            start: vi.fn(),
+            stop: vi.fn(),
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+        });
+        this.createConvolver = () => ({
+            buffer: null,
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+        });
+        this.createBuffer = () => ({
+            getChannelData: () => new Float32Array(1024),
+        });
+        this.createStereoPanner = () => ({
+            pan: { value: 0, setTargetAtTime: vi.fn(), cancelScheduledValues: vi.fn() },
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+        });
+        this.resume = vi.fn().mockResolvedValue();
+        this.close = vi.fn().mockResolvedValue();
+    }
+};
+window.webkitAudioContext = window.AudioContext;
