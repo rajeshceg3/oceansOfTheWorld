@@ -50,6 +50,11 @@ describe('useOceanSound', () => {
         connect: vi.fn(),
     };
 
+    const stereoPannerMock = {
+        pan: { value: 0, setTargetAtTime: vi.fn(), cancelScheduledValues: vi.fn() },
+        connect: vi.fn(),
+    };
+
     // We define the mock class globally so we can extend it or use it
     window.AudioContext = class MockAudioContext {
         constructor() {
@@ -58,6 +63,7 @@ describe('useOceanSound', () => {
             this.createBufferSource = vi.fn(() => bufferSourceMock);
             this.createBiquadFilter = vi.fn(() => biquadFilterMock);
             this.createConvolver = vi.fn(() => convolverMock);
+            this.createStereoPanner = vi.fn(() => stereoPannerMock);
             this.createBuffer = vi.fn(() => ({
                 getChannelData: vi.fn(() => new Float32Array(4000))
             }));
@@ -102,6 +108,10 @@ describe('useOceanSound', () => {
             this.createBufferSource = vi.fn(() => bufferSourceMock);
             this.createBiquadFilter = vi.fn(() => biquadFilterMock);
             this.createConvolver = vi.fn(() => convolverMock);
+            this.createStereoPanner = vi.fn(() => ({
+                pan: { value: 0, setTargetAtTime: vi.fn(), cancelScheduledValues: vi.fn() },
+                connect: vi.fn(),
+            }));
             this.createBuffer = vi.fn(() => ({ getChannelData: vi.fn(() => new Float32Array(4000)) }));
             this.sampleRate = 1000;
             this.currentTime = 0;
