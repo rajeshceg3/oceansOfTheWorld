@@ -59,7 +59,45 @@ const AUDIO_PROFILES = {
     verbDecay: 6,
     binauralDelta: 14, // Beta (Focus/Alert) - or maybe Low Alpha for calm
     detune: 10,
+    grainDensity: 0.6,
+    grainType: 'ice',
+    grainFreqBase: 3000,
+    grainMix: 0.5
   }
+};
+
+// Add granular parameters to other profiles (defaults if missing)
+Object.keys(AUDIO_PROFILES).forEach(key => {
+    const p = AUDIO_PROFILES[key];
+    if (!p.grainDensity) {
+        if (key === 'pacific') {
+            p.grainDensity = 0.8; p.grainType = 'bubble'; p.grainFreqBase = 400; p.grainMix = 0.3;
+        } else if (key === 'atlantic') {
+            p.grainDensity = 0.5; p.grainType = 'shimmer'; p.grainFreqBase = 800; p.grainMix = 0.25;
+        } else if (key === 'indian') {
+            p.grainDensity = 0.4; p.grainType = 'shimmer'; p.grainFreqBase = 600; p.grainMix = 0.25;
+        } else if (key === 'southern') {
+            p.grainDensity = 0.3; p.grainType = 'ice'; p.grainFreqBase = 2000; p.grainMix = 0.4;
+        }
+    }
+});
+
+const createBrownNoiseBuffer = (ctx) => {
+  const bufferSize = 4 * ctx.sampleRate;
+  const buffer = ctx.createBuffer(2, bufferSize, ctx.sampleRate);
+  const left = buffer.getChannelData(0);
+  const right = buffer.getChannelData(1);
+
+  [left, right].forEach(data => {
+    let lastOut = 0;
+    for (let i = 0; i < bufferSize; i++) {
+        const white = Math.random() * 2 - 1;
+        data[i] = (lastOut + (0.02 * white)) / 1.02;
+        lastOut = data[i];
+        data[i] *= 3.5; // Compensate for gain loss
+    }
+  });
+  return buffer;
 };
 
 const createImpulseResponse = (ctx, duration, decay) => {
@@ -104,6 +142,54 @@ const createNoiseBuffer = (ctx) => {
   return buffer;
 };
 
+const triggerGrain = (ctx, destination, params, time) => {
+    const { type, freqBase, mix } = params;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const panner = ctx.createStereoPanner();
+
+    // Randomize
+    const freq = freqBase * (0.9 + Math.random() * 0.2);
+    const pan = Math.random() * 1.5 - 0.75; // Spread
+    const duration = 0.05 + Math.random() * 0.15;
+
+    osc.frequency.value = freq;
+    panner.pan.value = pan;
+
+    if (type === 'bubble') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, time);
+        osc.frequency.exponentialRampToValueAtTime(freq * 0.5, time + duration);
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(mix, time + duration * 0.1);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+    } else if (type === 'ice') {
+        osc.type = Math.random() > 0.5 ? 'triangle' : 'sine';
+        osc.frequency.setValueAtTime(freq * 1.5, time);
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(mix * 0.8, time + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration * 0.5);
+    } else { // shimmer
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq * 1.2, time);
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(mix * 0.5, time + duration * 0.5);
+        gain.gain.linearRampToValueAtTime(0, time + duration);
+    }
+
+    osc.connect(gain);
+    gain.connect(panner);
+    panner.connect(destination);
+
+    osc.start(time);
+    osc.stop(time + duration + 0.1);
+
+    // Auto-disconnect is handled by GC for finished nodes usually,
+    // but in complex apps manual disconnect can help.
+    // Given the simplicity, we rely on GC.
+};
+
 export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
   const audioContextRef = useRef(null);
   const masterGainRef = useRef(null);
@@ -144,6 +230,14 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
     nodes.binauralLeft.frequency.setTargetAtTime(profile.droneFreq, now, rampTime);
     nodes.binauralRight.frequency.setTargetAtTime(profile.droneFreq + profile.binauralDelta, now, rampTime);
 
+    // --- Granular Engine Params ---
+    if (nodes.granularParams) {
+        nodes.granularParams.density = profile.grainDensity;
+        nodes.granularParams.type = profile.grainType;
+        nodes.granularParams.freqBase = profile.grainFreqBase;
+        nodes.granularParams.mix = profile.grainMix;
+    }
+
   }, []);
 
   const initAudio = useCallback(() => {
@@ -177,7 +271,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         // LAYER 1: Deep (Rumble) - Stereo
         // -------------------------
         const deepNoise = ctx.createBufferSource();
-        deepNoise.buffer = createNoiseBuffer(ctx);
+        deepNoise.buffer = createBrownNoiseBuffer(ctx);
         deepNoise.loop = true;
 
         const deepFilter = ctx.createBiquadFilter();
@@ -309,6 +403,17 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         const droneGain = ctx.createGain();
         droneGain.gain.value = 0.15;
 
+        // Breathing LFO
+        const droneLFO = ctx.createOscillator();
+        droneLFO.type = 'sine';
+        droneLFO.frequency.value = 0.08; // Very slow breath
+        const droneLFOGain = ctx.createGain();
+        droneLFOGain.gain.value = 0.03; // Gentle modulation
+
+        droneLFO.connect(droneLFOGain);
+        droneLFOGain.connect(droneGain.gain);
+        droneLFO.start();
+
         const droneFilter = ctx.createBiquadFilter();
         droneFilter.type = 'lowpass';
         droneFilter.frequency.value = 400;
@@ -385,6 +490,52 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         binauralLeft.start();
         binauralRight.start();
 
+        // -------------------------
+        // Granular Engine (The Details)
+        // -------------------------
+        const granularGain = ctx.createGain();
+        granularGain.gain.value = 1;
+        granularGain.connect(convolver);
+        granularGain.connect(dryGain);
+
+        const granularParams = {
+            density: 0,
+            type: 'bubble',
+            freqBase: 400,
+            mix: 0.1
+        };
+
+        // Scheduler Loop
+        // We use a lookahead system to schedule grains
+        const lookahead = 100; // ms to check frequency
+        const scheduleAheadTime = 0.2; // s to schedule ahead
+        let nextGrainTime = ctx.currentTime;
+
+        const scheduler = () => {
+            const currentTime = ctx.currentTime;
+            // Schedule grains until we catch up to scheduleAheadTime
+            while (nextGrainTime < currentTime + scheduleAheadTime) {
+                // Determine if we trigger a grain based on density
+                // Density 0-1.
+                // We'll treat density as probability per check step, or just modulate interval
+                // Let's make interval random based on density.
+                // High density = low interval.
+                // interval = 0.05s to 0.5s mapped from density.
+
+                const minInterval = 0.05;
+                const maxInterval = 0.5;
+                // invert density: 1 -> min, 0 -> max
+                const interval = minInterval + (1 - granularParams.density) * (maxInterval - minInterval);
+                const randomJitter = Math.random() * 0.1;
+
+                triggerGrain(ctx, granularGain, granularParams, nextGrainTime);
+
+                nextGrainTime += interval + randomJitter;
+            }
+        };
+
+        const granularInterval = setInterval(scheduler, lookahead);
+
         // Store nodes
         nodesRef.current = {
             deepFilter, deepLFO, deepLFOGain,
@@ -392,7 +543,8 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
             textureFilter, textureGain,
             droneBase, droneDetune1, droneDetune2, droneHarmonic,
             binauralLeft, binauralRight,
-            convolver
+            convolver,
+            granularInterval, granularParams
         };
 
         isInitializedRef.current = true;
@@ -431,6 +583,9 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
 
   useEffect(() => {
       return () => {
+          if (nodesRef.current && nodesRef.current.granularInterval) {
+              clearInterval(nodesRef.current.granularInterval);
+          }
           if (audioContextRef.current) {
               audioContextRef.current.close();
               isInitializedRef.current = false;
