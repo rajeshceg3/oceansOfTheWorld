@@ -19,6 +19,10 @@ const AUDIO_PROFILES = {
     verbDecay: 4,
     binauralDelta: 7.83, // Schumann Resonance (Relaxed Alertness)
     detune: 5, // Cents
+    subBassFreq: 40,
+    subBassGain: 0.5,
+    windFreq: 2000,
+    windGain: 0.1,
   },
   atlantic: {
     baseFreq: 80,
@@ -29,6 +33,10 @@ const AUDIO_PROFILES = {
     verbDecay: 2.5,
     binauralDelta: 10, // Alpha (Calm focus)
     detune: 8,
+    subBassFreq: 50,
+    subBassGain: 0.45,
+    windFreq: 3000,
+    windGain: 0.2,
   },
   indian: {
     baseFreq: 70,
@@ -39,6 +47,10 @@ const AUDIO_PROFILES = {
     verbDecay: 3.5,
     binauralDelta: 6, // Theta (Deep relaxation)
     detune: 6,
+    subBassFreq: 45,
+    subBassGain: 0.4,
+    windFreq: 2500,
+    windGain: 0.15,
   },
   southern: {
     baseFreq: 90,
@@ -49,6 +61,10 @@ const AUDIO_PROFILES = {
     verbDecay: 5,
     binauralDelta: 4, // Low Theta (Dreamy)
     detune: 12,
+    subBassFreq: 60,
+    subBassGain: 0.35,
+    windFreq: 4000,
+    windGain: 0.25,
   },
   arctic: {
     baseFreq: 100,
@@ -62,7 +78,11 @@ const AUDIO_PROFILES = {
     grainDensity: 0.6,
     grainType: 'ice',
     grainFreqBase: 3000,
-    grainMix: 0.5
+    grainMix: 0.5,
+    subBassFreq: 35,
+    subBassGain: 0.3,
+    windFreq: 5000,
+    windGain: 0.3,
   }
 };
 
@@ -160,22 +180,23 @@ const triggerGrain = (ctx, destination, params, time) => {
     if (type === 'bubble') {
         osc.type = 'sine';
         osc.frequency.setValueAtTime(freq, time);
-        osc.frequency.exponentialRampToValueAtTime(freq * 0.5, time + duration);
+        // sharper drop for "bloop" sound
+        osc.frequency.exponentialRampToValueAtTime(freq * 0.4, time + duration * 0.8);
         gain.gain.setValueAtTime(0, time);
-        gain.gain.linearRampToValueAtTime(mix, time + duration * 0.1);
+        gain.gain.linearRampToValueAtTime(mix, time + duration * 0.05); // Faster attack
         gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
     } else if (type === 'ice') {
         osc.type = Math.random() > 0.5 ? 'triangle' : 'sine';
-        osc.frequency.setValueAtTime(freq * 1.5, time);
+        osc.frequency.setValueAtTime(freq * 2.0, time); // Higher pitch for ice
         gain.gain.setValueAtTime(0, time);
-        gain.gain.linearRampToValueAtTime(mix * 0.8, time + 0.01);
-        gain.gain.exponentialRampToValueAtTime(0.001, time + duration * 0.5);
+        gain.gain.linearRampToValueAtTime(mix * 0.8, time + 0.005); // Sharp attack
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration * 0.3); // Short decay
     } else { // shimmer
         osc.type = 'sine';
         osc.frequency.setValueAtTime(freq * 1.2, time);
         gain.gain.setValueAtTime(0, time);
         gain.gain.linearRampToValueAtTime(mix * 0.5, time + duration * 0.5);
-        gain.gain.linearRampToValueAtTime(0, time + duration);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration); // Smooth decay
     }
 
     osc.connect(gain);
@@ -210,6 +231,10 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
     nodes.deepLFO.frequency.setTargetAtTime(profile.modRate * 0.5, now, rampTime);
     nodes.deepLFOGain.gain.setTargetAtTime(profile.baseFreq * 0.5, now, rampTime);
 
+    // --- Sub-Bass Layer ---
+    nodes.subOsc.frequency.setTargetAtTime(profile.subBassFreq, now, rampTime);
+    nodes.subGain.gain.setTargetAtTime(profile.subBassGain, now, rampTime);
+
     // --- Surface Layer ---
     nodes.surfaceFilter.frequency.setTargetAtTime(profile.baseFreq * 4, now, rampTime);
     nodes.surfaceLFO.frequency.setTargetAtTime(profile.modRate, now, rampTime);
@@ -219,6 +244,10 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
     nodes.textureGain.gain.setTargetAtTime(profile.textureMix * 0.3, now, rampTime);
     const textureCutoff = oceanId === 'arctic' || oceanId === 'southern' ? 4000 : 2000;
     nodes.textureFilter.frequency.setTargetAtTime(textureCutoff, now, rampTime);
+
+    // --- Wind Layer ---
+    nodes.windFilter.frequency.setTargetAtTime(profile.windFreq, now, rampTime);
+    nodes.windGain.gain.setTargetAtTime(profile.windGain, now, rampTime);
 
     // --- Drone Cluster ---
     nodes.droneBase.frequency.setTargetAtTime(profile.droneFreq, now, rampTime);
@@ -249,9 +278,17 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         audioContextRef.current = ctx;
 
         // Master Chain
+        const masterCompressor = ctx.createDynamicsCompressor();
+        masterCompressor.threshold.value = -24;
+        masterCompressor.knee.value = 30;
+        masterCompressor.ratio.value = 12;
+        masterCompressor.attack.value = 0.003;
+        masterCompressor.release.value = 0.25;
+        masterCompressor.connect(ctx.destination);
+
         const masterGain = ctx.createGain();
         masterGain.gain.value = 0;
-        masterGain.connect(ctx.destination);
+        masterGain.connect(masterCompressor);
         masterGainRef.current = masterGain;
 
         // Reverb (Convolution) - Stereo
@@ -312,6 +349,37 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         deepNoise.start();
         deepLFO.start();
         deepPanLFO.start();
+
+        // -------------------------
+        // LAYER 1.5: Sub-Bass (Physical Rumble)
+        // -------------------------
+        const subOsc = ctx.createOscillator();
+        subOsc.type = 'sine';
+        subOsc.frequency.value = 50;
+
+        const subFilter = ctx.createBiquadFilter();
+        subFilter.type = 'lowpass';
+        subFilter.frequency.value = 120;
+
+        const subGain = ctx.createGain();
+        subGain.gain.value = 0.5;
+
+        const subPanner = ctx.createStereoPanner();
+        subPanner.pan.value = 0;
+
+        subOsc.connect(subFilter);
+        subFilter.connect(subGain);
+        subGain.connect(subPanner);
+        subPanner.connect(dryGain);
+        subPanner.connect(convolver);
+
+        // Reuse deepPanLFO for sub movement to sync with deep rumble
+        const subPanGain = ctx.createGain();
+        subPanGain.gain.value = 0.2;
+        deepPanLFO.connect(subPanGain);
+        subPanGain.connect(subPanner.pan);
+
+        subOsc.start();
 
         // -------------------------
         // LAYER 2: Surface (Swell) - Stereo
@@ -396,6 +464,40 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         textureNoise.start();
         bubbleLFO1.start();
         bubbleLFO2.start();
+
+        // -------------------------
+        // LAYER 3.5: Wind (High Altitude)
+        // -------------------------
+        const windNoise = ctx.createBufferSource();
+        windNoise.buffer = createNoiseBuffer(ctx);
+        windNoise.loop = true;
+
+        const windFilter = ctx.createBiquadFilter();
+        windFilter.type = 'highpass';
+        windFilter.frequency.value = 2000;
+        windFilter.Q.value = 0.5;
+
+        const windGain = ctx.createGain();
+        windGain.gain.value = 0.1;
+
+        const windPanner = ctx.createStereoPanner();
+
+        const windLFO = ctx.createOscillator();
+        windLFO.type = 'sine';
+        windLFO.frequency.value = 0.05; // Slow wind shifts
+        const windLFOGain = ctx.createGain();
+        windLFOGain.gain.value = 0.8;
+
+        windLFO.connect(windLFOGain);
+        windLFOGain.connect(windPanner.pan);
+
+        windNoise.connect(windFilter);
+        windFilter.connect(windGain);
+        windGain.connect(windPanner);
+        windPanner.connect(convolver); // Very airy/spacious
+
+        windNoise.start();
+        windLFO.start();
 
         // -------------------------
         // LAYER 4: Drone Cluster (The Mind)
@@ -539,8 +641,10 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         // Store nodes
         nodesRef.current = {
             deepFilter, deepLFO, deepLFOGain,
+            subOsc, subGain,
             surfaceFilter, surfaceLFO, surfaceLFOGain,
             textureFilter, textureGain,
+            windNoise, windLFO, windFilter, windGain,
             droneBase, droneDetune1, droneDetune2, droneHarmonic,
             binauralLeft, binauralRight,
             convolver,
