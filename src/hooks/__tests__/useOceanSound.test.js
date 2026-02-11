@@ -10,9 +10,20 @@ describe('useOceanSound', () => {
   let bufferSourceMock;
   let biquadFilterMock;
   let convolverMock;
+  let compressorMock;
 
   beforeEach(() => {
     // Mock AudioContext and related nodes
+    compressorMock = {
+      threshold: { value: -24, setTargetAtTime: vi.fn() },
+      knee: { value: 30, setTargetAtTime: vi.fn() },
+      ratio: { value: 12, setTargetAtTime: vi.fn() },
+      attack: { value: 0.003, setTargetAtTime: vi.fn() },
+      release: { value: 0.25, setTargetAtTime: vi.fn() },
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+    };
+
     gainNodeMock = {
       gain: {
         value: 0,
@@ -63,6 +74,7 @@ describe('useOceanSound', () => {
             this.createBufferSource = vi.fn(() => bufferSourceMock);
             this.createBiquadFilter = vi.fn(() => biquadFilterMock);
             this.createConvolver = vi.fn(() => convolverMock);
+            this.createDynamicsCompressor = vi.fn(() => compressorMock);
             this.createStereoPanner = vi.fn(() => stereoPannerMock);
             this.createBuffer = vi.fn(() => ({
                 getChannelData: vi.fn(() => new Float32Array(4000))
@@ -108,6 +120,7 @@ describe('useOceanSound', () => {
             this.createBufferSource = vi.fn(() => bufferSourceMock);
             this.createBiquadFilter = vi.fn(() => biquadFilterMock);
             this.createConvolver = vi.fn(() => convolverMock);
+            this.createDynamicsCompressor = vi.fn(() => compressorMock);
             this.createStereoPanner = vi.fn(() => ({
                 pan: { value: 0, setTargetAtTime: vi.fn(), cancelScheduledValues: vi.fn() },
                 connect: vi.fn(),

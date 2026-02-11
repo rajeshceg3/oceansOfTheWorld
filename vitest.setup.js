@@ -84,6 +84,15 @@ window.AudioContext = class AudioContext {
             connect: vi.fn(),
             disconnect: vi.fn(),
         });
+        this.createDynamicsCompressor = () => ({
+            threshold: { value: -24, setTargetAtTime: vi.fn() },
+            knee: { value: 30, setTargetAtTime: vi.fn() },
+            ratio: { value: 12, setTargetAtTime: vi.fn() },
+            attack: { value: 0.003, setTargetAtTime: vi.fn() },
+            release: { value: 0.25, setTargetAtTime: vi.fn() },
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+        });
         this.createBuffer = () => ({
             getChannelData: () => new Float32Array(1024),
         });
