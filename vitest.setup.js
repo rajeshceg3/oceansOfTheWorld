@@ -79,6 +79,15 @@ window.AudioContext = class AudioContext {
             connect: vi.fn(),
             disconnect: vi.fn(),
         });
+        this.createDynamicsCompressor = () => ({
+            threshold: { value: 0, setTargetAtTime: vi.fn() },
+            knee: { value: 0, setTargetAtTime: vi.fn() },
+            ratio: { value: 0, setTargetAtTime: vi.fn() },
+            attack: { value: 0, setTargetAtTime: vi.fn() },
+            release: { value: 0, setTargetAtTime: vi.fn() },
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+        });
         this.createConvolver = () => ({
             buffer: null,
             connect: vi.fn(),

@@ -19,6 +19,8 @@ const AUDIO_PROFILES = {
     verbDecay: 4,
     binauralDelta: 7.83, // Schumann Resonance (Relaxed Alertness)
     detune: 5, // Cents
+    windFreq: 400,
+    windGain: 0.08,
   },
   atlantic: {
     baseFreq: 80,
@@ -29,6 +31,8 @@ const AUDIO_PROFILES = {
     verbDecay: 2.5,
     binauralDelta: 10, // Alpha (Calm focus)
     detune: 8,
+    windFreq: 700,
+    windGain: 0.15,
   },
   indian: {
     baseFreq: 70,
@@ -39,6 +43,8 @@ const AUDIO_PROFILES = {
     verbDecay: 3.5,
     binauralDelta: 6, // Theta (Deep relaxation)
     detune: 6,
+    windFreq: 500,
+    windGain: 0.1,
   },
   southern: {
     baseFreq: 90,
@@ -49,6 +55,8 @@ const AUDIO_PROFILES = {
     verbDecay: 5,
     binauralDelta: 4, // Low Theta (Dreamy)
     detune: 12,
+    windFreq: 1000,
+    windGain: 0.25,
   },
   arctic: {
     baseFreq: 100,
@@ -59,6 +67,8 @@ const AUDIO_PROFILES = {
     verbDecay: 6,
     binauralDelta: 14, // Beta (Focus/Alert) - or maybe Low Alpha for calm
     detune: 10,
+    windFreq: 1500,
+    windGain: 0.35,
     grainDensity: 0.6,
     grainType: 'ice',
     grainFreqBase: 3000,
@@ -220,6 +230,10 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
     const textureCutoff = oceanId === 'arctic' || oceanId === 'southern' ? 4000 : 2000;
     nodes.textureFilter.frequency.setTargetAtTime(textureCutoff, now, rampTime);
 
+    // --- Wind Layer ---
+    nodes.windFilter.frequency.setTargetAtTime(profile.windFreq, now, rampTime);
+    nodes.windGain.gain.setTargetAtTime(profile.windGain, now, rampTime);
+
     // --- Drone Cluster ---
     nodes.droneBase.frequency.setTargetAtTime(profile.droneFreq, now, rampTime);
     nodes.droneDetune1.frequency.setTargetAtTime(profile.droneFreq + (profile.detune/100), now, rampTime); // Slightly sharp
@@ -254,18 +268,27 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         masterGain.connect(ctx.destination);
         masterGainRef.current = masterGain;
 
+        // Dynamics Compressor (The Glue)
+        const compressor = ctx.createDynamicsCompressor();
+        compressor.threshold.value = -24;
+        compressor.knee.value = 30;
+        compressor.ratio.value = 3;
+        compressor.attack.value = 0.003;
+        compressor.release.value = 0.25;
+        compressor.connect(masterGain);
+
         // Reverb (Convolution) - Stereo
         const convolver = ctx.createConvolver();
         convolver.buffer = createImpulseResponse(ctx, 4, 2.5);
         const reverbGain = ctx.createGain();
         reverbGain.gain.value = 0.4;
         convolver.connect(reverbGain);
-        reverbGain.connect(masterGain);
+        reverbGain.connect(compressor);
 
         // Dry Bus
         const dryGain = ctx.createGain();
         dryGain.gain.value = 0.7;
-        dryGain.connect(masterGain);
+        dryGain.connect(compressor);
 
         // -------------------------
         // LAYER 1: Deep (Rumble) - Stereo
@@ -398,6 +421,50 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         bubbleLFO2.start();
 
         // -------------------------
+        // LAYER 3.5: Wind (High-passed Noise)
+        // -------------------------
+        const windNoise = ctx.createBufferSource();
+        windNoise.buffer = createNoiseBuffer(ctx);
+        windNoise.loop = true;
+
+        const windFilter = ctx.createBiquadFilter();
+        windFilter.type = 'highpass';
+        windFilter.frequency.value = 800; // Default
+
+        const windGain = ctx.createGain();
+        windGain.gain.value = 0.1; // Default
+
+        const windPanner = ctx.createStereoPanner();
+
+        // Wind Gust LFO
+        const windLFO = ctx.createOscillator();
+        windLFO.frequency.value = 0.1; // Slow gusts
+        const windLFOGain = ctx.createGain();
+        windLFOGain.gain.value = 0.05; // Gain modulation amount
+
+        windLFO.connect(windLFOGain);
+        windLFOGain.connect(windGain.gain);
+
+        // Wind Pan LFO
+        const windPanLFO = ctx.createOscillator();
+        windPanLFO.frequency.value = 0.2;
+        const windPanGain = ctx.createGain();
+        windPanGain.gain.value = 0.6;
+
+        windPanLFO.connect(windPanGain);
+        windPanGain.connect(windPanner.pan);
+
+        windNoise.connect(windFilter);
+        windFilter.connect(windGain);
+        windGain.connect(windPanner);
+        windPanner.connect(dryGain);
+        windPanner.connect(convolver);
+
+        windNoise.start();
+        windLFO.start();
+        windPanLFO.start();
+
+        // -------------------------
         // LAYER 4: Drone Cluster (The Mind)
         // -------------------------
         const droneGain = ctx.createGain();
@@ -513,6 +580,12 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
 
         const scheduler = () => {
             const currentTime = ctx.currentTime;
+
+            // Fix time drift (tab inactive)
+            if (nextGrainTime < currentTime) {
+                nextGrainTime = currentTime;
+            }
+
             // Schedule grains until we catch up to scheduleAheadTime
             while (nextGrainTime < currentTime + scheduleAheadTime) {
                 // Determine if we trigger a grain based on density
@@ -541,6 +614,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
             deepFilter, deepLFO, deepLFOGain,
             surfaceFilter, surfaceLFO, surfaceLFOGain,
             textureFilter, textureGain,
+            windFilter, windGain,
             droneBase, droneDetune1, droneDetune2, droneHarmonic,
             binauralLeft, binauralRight,
             convolver,

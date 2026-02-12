@@ -10,6 +10,7 @@ describe('useOceanSound', () => {
   let bufferSourceMock;
   let biquadFilterMock;
   let convolverMock;
+  let dynamicsCompressorMock;
 
   beforeEach(() => {
     // Mock AudioContext and related nodes
@@ -55,6 +56,15 @@ describe('useOceanSound', () => {
         connect: vi.fn(),
     };
 
+    dynamicsCompressorMock = {
+        threshold: { value: 0, setTargetAtTime: vi.fn() },
+        knee: { value: 0, setTargetAtTime: vi.fn() },
+        ratio: { value: 0, setTargetAtTime: vi.fn() },
+        attack: { value: 0, setTargetAtTime: vi.fn() },
+        release: { value: 0, setTargetAtTime: vi.fn() },
+        connect: vi.fn(),
+    };
+
     // We define the mock class globally so we can extend it or use it
     window.AudioContext = class MockAudioContext {
         constructor() {
@@ -62,6 +72,7 @@ describe('useOceanSound', () => {
             this.createOscillator = vi.fn(() => oscillatorMock);
             this.createBufferSource = vi.fn(() => bufferSourceMock);
             this.createBiquadFilter = vi.fn(() => biquadFilterMock);
+            this.createDynamicsCompressor = vi.fn(() => dynamicsCompressorMock);
             this.createConvolver = vi.fn(() => convolverMock);
             this.createStereoPanner = vi.fn(() => stereoPannerMock);
             this.createBuffer = vi.fn(() => ({
@@ -107,6 +118,7 @@ describe('useOceanSound', () => {
             this.createOscillator = vi.fn(() => oscillatorMock);
             this.createBufferSource = vi.fn(() => bufferSourceMock);
             this.createBiquadFilter = vi.fn(() => biquadFilterMock);
+            this.createDynamicsCompressor = vi.fn(() => dynamicsCompressorMock);
             this.createConvolver = vi.fn(() => convolverMock);
             this.createStereoPanner = vi.fn(() => ({
                 pan: { value: 0, setTargetAtTime: vi.fn(), cancelScheduledValues: vi.fn() },
