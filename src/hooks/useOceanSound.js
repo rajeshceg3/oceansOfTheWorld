@@ -8,6 +8,8 @@ import { OCEANS } from '../data/oceans';
 // 3. Texture (Sparkle/Ice/Bubbles) - High-passed White Noise + Random Envelope / Granular Simulation
 // 4. Drone (Tonal Ambience) - Multi-Oscillator Cluster (Base, Detune, Harmonic)
 // 5. Binaural (Brainwave Entrainment) - Left/Right Frequency Delta for Alpha/Theta waves
+// 6. Bio (Life) - Procedural Marine Creatures (Whales, Clicks, Chirps)
+// 7. Swell (Movement) - Very slow amplitude modulation (breathing)
 
 const AUDIO_PROFILES = {
   pacific: {
@@ -21,6 +23,15 @@ const AUDIO_PROFILES = {
     detune: 5, // Cents
     windFreq: 400,
     windGain: 0.08,
+    swellRate: 0.05, // Very slow breath (20s)
+    swellDepth: 0.1, // Subtle
+    bioType: 'whale',
+    bioDensity: 0.15, // Occasional
+    bioFreqBase: 150,
+    grainDensity: 0.8,
+    grainType: 'bubble',
+    grainFreqBase: 400,
+    grainMix: 0.3
   },
   atlantic: {
     baseFreq: 80,
@@ -33,6 +44,15 @@ const AUDIO_PROFILES = {
     detune: 8,
     windFreq: 700,
     windGain: 0.15,
+    swellRate: 0.1, // Faster (10s)
+    swellDepth: 0.15, // More movement
+    bioType: 'click',
+    bioDensity: 0.4, // Active
+    bioFreqBase: 2000,
+    grainDensity: 0.5,
+    grainType: 'shimmer',
+    grainFreqBase: 800,
+    grainMix: 0.25
   },
   indian: {
     baseFreq: 70,
@@ -45,6 +65,15 @@ const AUDIO_PROFILES = {
     detune: 6,
     windFreq: 500,
     windGain: 0.1,
+    swellRate: 0.08,
+    swellDepth: 0.12,
+    bioType: 'chirp',
+    bioDensity: 0.25,
+    bioFreqBase: 800,
+    grainDensity: 0.4,
+    grainType: 'droplet',
+    grainFreqBase: 600,
+    grainMix: 0.25
   },
   southern: {
     baseFreq: 90,
@@ -57,6 +86,15 @@ const AUDIO_PROFILES = {
     detune: 12,
     windFreq: 1000,
     windGain: 0.25,
+    swellRate: 0.15,
+    swellDepth: 0.2, // Stormy
+    bioType: 'whale',
+    bioDensity: 0.3,
+    bioFreqBase: 100,
+    grainDensity: 0.3,
+    grainType: 'ice',
+    grainFreqBase: 2000,
+    grainMix: 0.4
   },
   arctic: {
     baseFreq: 100,
@@ -65,32 +103,21 @@ const AUDIO_PROFILES = {
     droneFreq: 440, // A4
     harmonic: 2.0,
     verbDecay: 6,
-    binauralDelta: 14, // Beta (Focus/Alert) - or maybe Low Alpha for calm
+    binauralDelta: 14, // Beta (Focus/Alert)
     detune: 10,
     windFreq: 1500,
     windGain: 0.35,
+    swellRate: 0.03, // Glacial pace
+    swellDepth: 0.05,
+    bioType: 'ice-crack',
+    bioDensity: 0.5,
+    bioFreqBase: 300,
     grainDensity: 0.6,
     grainType: 'ice',
     grainFreqBase: 3000,
     grainMix: 0.5
   }
 };
-
-// Add granular parameters to other profiles (defaults if missing)
-Object.keys(AUDIO_PROFILES).forEach(key => {
-    const p = AUDIO_PROFILES[key];
-    if (!p.grainDensity) {
-        if (key === 'pacific') {
-            p.grainDensity = 0.8; p.grainType = 'bubble'; p.grainFreqBase = 400; p.grainMix = 0.3;
-        } else if (key === 'atlantic') {
-            p.grainDensity = 0.5; p.grainType = 'shimmer'; p.grainFreqBase = 800; p.grainMix = 0.25;
-        } else if (key === 'indian') {
-            p.grainDensity = 0.4; p.grainType = 'shimmer'; p.grainFreqBase = 600; p.grainMix = 0.25;
-        } else if (key === 'southern') {
-            p.grainDensity = 0.3; p.grainType = 'ice'; p.grainFreqBase = 2000; p.grainMix = 0.4;
-        }
-    }
-});
 
 const createBrownNoiseBuffer = (ctx) => {
   const bufferSize = 4 * ctx.sampleRate;
@@ -120,8 +147,14 @@ const createImpulseResponse = (ctx, duration, decay) => {
   for (let i = 0; i < length; i++) {
     const n = i / length;
     const amp = Math.pow(1 - n, decay);
+    // Decorrelate channels for wider stereo
     left[i] = (Math.random() * 2 - 1) * amp;
-    right[i] = (Math.random() * 2 - 1) * amp;
+    right[i] = (Math.random() * 2 - 1) * amp * 0.8; // Slightly quieter right for imbalance/width
+
+    // Add some early reflections logic (very simple delay simulation)
+    if (i > 1000 && i < 2000) {
+        left[i] += (Math.random() * 2 - 1) * 0.5 * amp;
+    }
   }
   return impulse;
 };
@@ -164,7 +197,6 @@ const triggerGrain = (ctx, destination, params, time) => {
     const pan = Math.random() * 1.5 - 0.75; // Spread
     const duration = 0.05 + Math.random() * 0.15;
 
-    osc.frequency.value = freq;
     panner.pan.value = pan;
 
     if (type === 'bubble') {
@@ -180,7 +212,14 @@ const triggerGrain = (ctx, destination, params, time) => {
         gain.gain.setValueAtTime(0, time);
         gain.gain.linearRampToValueAtTime(mix * 0.8, time + 0.01);
         gain.gain.exponentialRampToValueAtTime(0.001, time + duration * 0.5);
-    } else { // shimmer
+    } else if (type === 'droplet') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq * 2, time);
+        osc.frequency.exponentialRampToValueAtTime(freq * 0.5, time + duration * 0.5);
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(mix, time + 0.005);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration * 0.4);
+    } else { // shimmer or default
         osc.type = 'sine';
         osc.frequency.setValueAtTime(freq * 1.2, time);
         gain.gain.setValueAtTime(0, time);
@@ -193,11 +232,101 @@ const triggerGrain = (ctx, destination, params, time) => {
     panner.connect(destination);
 
     osc.start(time);
-    osc.stop(time + duration + 0.1);
+    osc.stop(time + duration + 0.2);
+};
 
-    // Auto-disconnect is handled by GC for finished nodes usually,
-    // but in complex apps manual disconnect can help.
-    // Given the simplicity, we rely on GC.
+const triggerBioSound = (ctx, destination, params, time) => {
+    const { bioType, bioFreqBase, bioDensity } = params;
+    // Density acts as probability check caller side, but here we can use it for intensity
+    const mix = 0.2; // Base volume for bio sounds
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const panner = ctx.createStereoPanner();
+    const pan = Math.random() * 1.8 - 0.9; // Wide spread
+
+    panner.pan.value = pan;
+
+    if (bioType === 'whale') {
+        const duration = 2 + Math.random() * 3;
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(bioFreqBase, time);
+        // Slow sweep up or down
+        const endFreq = bioFreqBase * (0.8 + Math.random() * 0.4);
+        osc.frequency.exponentialRampToValueAtTime(endFreq, time + duration);
+
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(mix * 1.5, time + duration * 0.2);
+        gain.gain.linearRampToValueAtTime(mix, time + duration * 0.8);
+        gain.gain.linearRampToValueAtTime(0, time + duration);
+
+        osc.start(time);
+        osc.stop(time + duration + 0.5);
+
+    } else if (bioType === 'click') {
+        // Clicks are often short bursts of noise or high freq sine
+        const duration = 0.01;
+        const clicks = Math.floor(Math.random() * 5) + 3; // Burst of 3-8 clicks
+
+        for(let i=0; i<clicks; i++) {
+             const t = time + i * (0.05 + Math.random() * 0.05);
+             const oscClick = ctx.createOscillator();
+             const gainClick = ctx.createGain();
+             oscClick.frequency.value = bioFreqBase + Math.random() * 1000;
+             oscClick.type = 'sine';
+
+             gainClick.gain.setValueAtTime(mix, t);
+             gainClick.gain.exponentialRampToValueAtTime(0.001, t + 0.01);
+
+             oscClick.connect(gainClick);
+             gainClick.connect(panner); // Shared panner
+             oscClick.start(t);
+             oscClick.stop(t + 0.05);
+        }
+        // No main osc
+        return;
+
+    } else if (bioType === 'chirp') {
+        const duration = 0.1 + Math.random() * 0.1;
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(bioFreqBase, time);
+        osc.frequency.linearRampToValueAtTime(bioFreqBase * 2, time + duration);
+
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(mix, time + duration * 0.1);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+        osc.start(time);
+        osc.stop(time + duration + 0.1);
+
+    } else if (bioType === 'ice-crack') {
+        // High passed noise burst
+        const duration = 0.3 + Math.random() * 0.4;
+        const bufferSrc = ctx.createBufferSource();
+        bufferSrc.buffer = createNoiseBuffer(ctx);
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.value = 800;
+
+        gain.gain.setValueAtTime(mix * 1.2, time);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+        bufferSrc.connect(filter);
+        filter.connect(gain);
+        // gain connected to panner below
+
+        bufferSrc.start(time);
+        bufferSrc.stop(time + duration + 0.1);
+
+        // Skip osc connect
+        gain.connect(panner);
+        panner.connect(destination);
+        return;
+    }
+
+    osc.connect(gain);
+    gain.connect(panner);
+    panner.connect(destination);
 };
 
 export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
@@ -236,20 +365,30 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
 
     // --- Drone Cluster ---
     nodes.droneBase.frequency.setTargetAtTime(profile.droneFreq, now, rampTime);
-    nodes.droneDetune1.frequency.setTargetAtTime(profile.droneFreq + (profile.detune/100), now, rampTime); // Slightly sharp
-    nodes.droneDetune2.frequency.setTargetAtTime(profile.droneFreq - (profile.detune/100), now, rampTime); // Slightly flat
+    nodes.droneDetune1.frequency.setTargetAtTime(profile.droneFreq + (profile.detune/100), now, rampTime);
+    nodes.droneDetune2.frequency.setTargetAtTime(profile.droneFreq - (profile.detune/100), now, rampTime);
     nodes.droneHarmonic.frequency.setTargetAtTime(profile.droneFreq * profile.harmonic, now, rampTime);
 
     // --- Binaural Layer ---
     nodes.binauralLeft.frequency.setTargetAtTime(profile.droneFreq, now, rampTime);
     nodes.binauralRight.frequency.setTargetAtTime(profile.droneFreq + profile.binauralDelta, now, rampTime);
 
-    // --- Granular Engine Params ---
+    // --- Swell (Breathing) ---
+    if (nodes.swellLFO && nodes.swellGain) {
+        nodes.swellLFO.frequency.setTargetAtTime(profile.swellRate, now, rampTime);
+        nodes.swellGain.gain.setTargetAtTime(profile.swellDepth, now, rampTime);
+    }
+
+    // --- Granular & Bio Engine Params ---
     if (nodes.granularParams) {
         nodes.granularParams.density = profile.grainDensity;
         nodes.granularParams.type = profile.grainType;
         nodes.granularParams.freqBase = profile.grainFreqBase;
         nodes.granularParams.mix = profile.grainMix;
+
+        nodes.granularParams.bioType = profile.bioType;
+        nodes.granularParams.bioDensity = profile.bioDensity;
+        nodes.granularParams.bioFreqBase = profile.bioFreqBase;
     }
 
   }, []);
@@ -306,7 +445,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         deepGain.gain.value = 0.8;
 
         const deepPanner = ctx.createStereoPanner();
-        deepPanner.pan.value = 0; // Center but wide due to stereo buffer
+        deepPanner.pan.value = 0;
 
         deepNoise.connect(deepFilter);
         deepFilter.connect(deepGain);
@@ -326,9 +465,9 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         // Slow Pan LFO for Deep
         const deepPanLFO = ctx.createOscillator();
         deepPanLFO.type = 'sine';
-        deepPanLFO.frequency.value = 0.02; // Very slow drift
+        deepPanLFO.frequency.value = 0.02;
         const deepPanGain = ctx.createGain();
-        deepPanGain.gain.value = 0.3; // Gentle movement
+        deepPanGain.gain.value = 0.3;
         deepPanLFO.connect(deepPanGain);
         deepPanGain.connect(deepPanner.pan);
 
@@ -369,7 +508,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         surfaceLFO.connect(surfaceLFOGain);
         surfaceLFOGain.connect(surfaceFilter.frequency);
 
-        // Surface Pan LFO (Faster than Deep)
+        // Surface Pan LFO
         const surfacePanLFO = ctx.createOscillator();
         surfacePanLFO.type = 'sine';
         surfacePanLFO.frequency.value = 0.1;
@@ -398,13 +537,13 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
 
         const texturePanner = ctx.createStereoPanner();
 
-        // Random Bubble LFO (simulated by summing two non-harmonic LFOs)
+        // Random Bubble LFO
         const bubbleLFO1 = ctx.createOscillator();
         bubbleLFO1.frequency.value = 0.5;
         const bubbleLFO2 = ctx.createOscillator();
         bubbleLFO2.frequency.value = 0.33;
         const bubbleLFOGain = ctx.createGain();
-        bubbleLFOGain.gain.value = 0.8; // Pan amount
+        bubbleLFOGain.gain.value = 0.8;
 
         bubbleLFO1.connect(bubbleLFOGain);
         bubbleLFO2.connect(bubbleLFOGain);
@@ -429,18 +568,18 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
 
         const windFilter = ctx.createBiquadFilter();
         windFilter.type = 'highpass';
-        windFilter.frequency.value = 800; // Default
+        windFilter.frequency.value = 800;
 
         const windGain = ctx.createGain();
-        windGain.gain.value = 0.1; // Default
+        windGain.gain.value = 0.1;
 
         const windPanner = ctx.createStereoPanner();
 
         // Wind Gust LFO
         const windLFO = ctx.createOscillator();
-        windLFO.frequency.value = 0.1; // Slow gusts
+        windLFO.frequency.value = 0.1;
         const windLFOGain = ctx.createGain();
-        windLFOGain.gain.value = 0.05; // Gain modulation amount
+        windLFOGain.gain.value = 0.05;
 
         windLFO.connect(windLFOGain);
         windLFOGain.connect(windGain.gain);
@@ -473,9 +612,9 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         // Breathing LFO
         const droneLFO = ctx.createOscillator();
         droneLFO.type = 'sine';
-        droneLFO.frequency.value = 0.08; // Very slow breath
+        droneLFO.frequency.value = 0.08;
         const droneLFOGain = ctx.createGain();
-        droneLFOGain.gain.value = 0.03; // Gentle modulation
+        droneLFOGain.gain.value = 0.03;
 
         droneLFO.connect(droneLFOGain);
         droneLFOGain.connect(droneGain.gain);
@@ -490,14 +629,14 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         droneBase.type = 'sine';
         droneBase.frequency.value = 55;
 
-        // Detune 1 (Left-ish)
+        // Detune 1
         const droneDetune1 = ctx.createOscillator();
         droneDetune1.type = 'triangle';
         droneDetune1.frequency.value = 55.05;
         const pannerD1 = ctx.createStereoPanner();
         pannerD1.pan.value = -0.5;
 
-        // Detune 2 (Right-ish)
+        // Detune 2
         const droneDetune2 = ctx.createOscillator();
         droneDetune2.type = 'triangle';
         droneDetune2.frequency.value = 54.95;
@@ -507,7 +646,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         // Harmonic
         const droneHarmonic = ctx.createOscillator();
         droneHarmonic.type = 'sine';
-        droneHarmonic.frequency.value = 110; // Octave
+        droneHarmonic.frequency.value = 110;
 
         droneBase.connect(droneGain);
 
@@ -520,7 +659,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         droneHarmonic.connect(droneGain);
 
         droneGain.connect(droneFilter);
-        droneFilter.connect(convolver); // Mostly wet
+        droneFilter.connect(convolver);
         droneFilter.connect(dryGain);
 
         droneBase.start();
@@ -532,19 +671,19 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         // LAYER 5: Binaural (The Soul)
         // -------------------------
         const binauralGain = ctx.createGain();
-        binauralGain.gain.value = 0.08; // Very subtle
+        binauralGain.gain.value = 0.08;
 
         const binauralLeft = ctx.createOscillator();
         binauralLeft.type = 'sine';
         binauralLeft.frequency.value = 200;
         const pannerLeft = ctx.createStereoPanner();
-        pannerLeft.pan.value = -1; // Hard Left
+        pannerLeft.pan.value = -1;
 
         const binauralRight = ctx.createOscillator();
         binauralRight.type = 'sine';
-        binauralRight.frequency.value = 207; // 7Hz difference (Theta)
+        binauralRight.frequency.value = 207;
         const pannerRight = ctx.createStereoPanner();
-        pannerRight.pan.value = 1; // Hard Right
+        pannerRight.pan.value = 1;
 
         binauralLeft.connect(pannerLeft);
         pannerLeft.connect(binauralGain);
@@ -552,58 +691,90 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         binauralRight.connect(pannerRight);
         pannerRight.connect(binauralGain);
 
-        binauralGain.connect(masterGain); // Direct to master, no reverb to keep phase clean
+        binauralGain.connect(masterGain);
 
         binauralLeft.start();
         binauralRight.start();
 
         // -------------------------
-        // Granular Engine (The Details)
+        // LAYER 7: Swell (Breathing)
+        // -------------------------
+        const swellLFO = ctx.createOscillator();
+        swellLFO.type = 'sine';
+        swellLFO.frequency.value = 0.05;
+
+        const swellGain = ctx.createGain();
+        swellGain.gain.value = 0.1;
+
+        swellLFO.connect(swellGain);
+        // Modulate volume of surface and wind
+        swellGain.connect(surfaceGain.gain);
+        swellGain.connect(windGain.gain);
+
+        swellLFO.start();
+
+        // -------------------------
+        // Granular & Bio Engine
         // -------------------------
         const granularGain = ctx.createGain();
         granularGain.gain.value = 1;
         granularGain.connect(convolver);
         granularGain.connect(dryGain);
 
+        const bioGain = ctx.createGain();
+        bioGain.gain.value = 1;
+        bioGain.connect(convolver);
+        bioGain.connect(dryGain);
+
         const granularParams = {
             density: 0,
             type: 'bubble',
             freqBase: 400,
-            mix: 0.1
+            mix: 0.1,
+            bioType: 'whale',
+            bioDensity: 0.1,
+            bioFreqBase: 150
         };
 
         // Scheduler Loop
-        // We use a lookahead system to schedule grains
-        const lookahead = 100; // ms to check frequency
-        const scheduleAheadTime = 0.2; // s to schedule ahead
+        const lookahead = 100; // ms
+        const scheduleAheadTime = 0.2; // s
         let nextGrainTime = ctx.currentTime;
+        let nextBioTime = ctx.currentTime + 2; // Start bio later
 
         const scheduler = () => {
             const currentTime = ctx.currentTime;
 
-            // Fix time drift (tab inactive)
+            // Fix time drift
             if (nextGrainTime < currentTime) {
                 nextGrainTime = currentTime;
             }
+            if (nextBioTime < currentTime) {
+                nextBioTime = currentTime;
+            }
 
-            // Schedule grains until we catch up to scheduleAheadTime
+            // Schedule grains
             while (nextGrainTime < currentTime + scheduleAheadTime) {
-                // Determine if we trigger a grain based on density
-                // Density 0-1.
-                // We'll treat density as probability per check step, or just modulate interval
-                // Let's make interval random based on density.
-                // High density = low interval.
-                // interval = 0.05s to 0.5s mapped from density.
-
                 const minInterval = 0.05;
                 const maxInterval = 0.5;
-                // invert density: 1 -> min, 0 -> max
                 const interval = minInterval + (1 - granularParams.density) * (maxInterval - minInterval);
                 const randomJitter = Math.random() * 0.1;
 
                 triggerGrain(ctx, granularGain, granularParams, nextGrainTime);
-
                 nextGrainTime += interval + randomJitter;
+            }
+
+            // Schedule Bio Sounds
+            if (nextBioTime < currentTime + scheduleAheadTime) {
+                // Bio density 0.1 (low) to 0.8 (high)
+                // Interval: Low density -> 15-30s, High density -> 5-10s
+                const minBioInterval = 5;
+                const maxBioInterval = 30;
+                const bioInterval = maxBioInterval - (granularParams.bioDensity * (maxBioInterval - minBioInterval));
+                const jitter = Math.random() * 5;
+
+                triggerBioSound(ctx, bioGain, granularParams, nextBioTime);
+                nextBioTime += bioInterval + jitter;
             }
         };
 
@@ -617,6 +788,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
             windFilter, windGain,
             droneBase, droneDetune1, droneDetune2, droneHarmonic,
             binauralLeft, binauralRight,
+            swellLFO, swellGain,
             convolver,
             granularInterval, granularParams
         };
