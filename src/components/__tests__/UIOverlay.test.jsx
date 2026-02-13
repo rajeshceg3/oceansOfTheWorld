@@ -3,9 +3,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import UIOverlay from '../UIOverlay';
 import { OCEANS } from '../../data/oceans';
 
-// Mock useOceanSound to avoid AudioContext issues
-vi.mock('../hooks/useOceanSound', () => ({
-  useOceanSound: vi.fn(),
+vi.mock('../../contexts/TourContext', () => ({
+    useTour: () => ({
+        startTour: vi.fn(),
+        isTourActive: false,
+        currentStep: null,
+    }),
 }));
 
 describe('UIOverlay', () => {
@@ -13,6 +16,9 @@ describe('UIOverlay', () => {
         oceans: OCEANS,
         currentOceanIndex: 0,
         onOceanChange: vi.fn(),
+        isSoundOn: false,
+        setIsSoundOn: vi.fn(),
+        playTourSound: vi.fn(),
     };
 
     beforeEach(() => {
@@ -21,7 +27,6 @@ describe('UIOverlay', () => {
 
     it('renders current ocean name and description', () => {
         render(<UIOverlay {...defaultProps} />);
-        // Use heading role for the main title to avoid collision with tooltips
         expect(screen.getByRole('heading', { name: OCEANS[0].name })).toBeInTheDocument();
         expect(screen.getByText(OCEANS[0].description)).toBeInTheDocument();
     });
@@ -41,19 +46,20 @@ describe('UIOverlay', () => {
 
     it('renders sound toggle button', () => {
         render(<UIOverlay {...defaultProps} />);
-        // Initially sound is off
         expect(screen.getByRole('button', { name: /Enable sound/i })).toBeInTheDocument();
     });
 
-    it('toggles sound state on click', () => {
+    it('calls setIsSoundOn when sound toggle is clicked', () => {
         render(<UIOverlay {...defaultProps} />);
         const soundButton = screen.getByRole('button', { name: /Enable sound/i });
 
         fireEvent.click(soundButton);
-        expect(screen.getByRole('button', { name: /Mute sound/i })).toBeInTheDocument();
+        expect(defaultProps.setIsSoundOn).toHaveBeenCalledWith(true);
+    });
 
-        fireEvent.click(soundButton);
-        expect(screen.getByRole('button', { name: /Enable sound/i })).toBeInTheDocument();
+    it('renders mute button when sound is on', () => {
+        render(<UIOverlay {...defaultProps} isSoundOn={true} />);
+        expect(screen.getByRole('button', { name: /Mute sound/i })).toBeInTheDocument();
     });
 
     it('hides UI when idle', async () => {

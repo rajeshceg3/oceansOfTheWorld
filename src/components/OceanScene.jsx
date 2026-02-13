@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import gsap from 'gsap';
 import * as THREE from 'three';
+import { useTour } from '../contexts/TourContext';
 import Creatures from './Creatures';
 import Particles from './Particles';
 
@@ -152,11 +153,13 @@ const CausticsPlane = ({ colorRef }) => {
 }
 
 const OceanScene = ({ ocean, onTransitionComplete }) => {
-  const { mouse } = useThree();
+  const { mouse, camera } = useThree();
+  const { isTourActive, currentStep } = useTour();
   const fogRef = useRef();
   const bgColorRef = useRef();
   const creaturesRef = useRef();
   const timelineRef = useRef(null);
+  const tourTargetRef = useRef(new THREE.Vector3(0, 0, -20)); // Default lookAt target
 
   // Light Refs
   const spotLightRef = useRef();
@@ -299,16 +302,45 @@ const OceanScene = ({ ocean, onTransitionComplete }) => {
     };
   }, [ocean, onTransitionComplete, renderedOcean.id]);
 
+  // Handle Tour Camera Transitions
+  useEffect(() => {
+    if (isTourActive && currentStep) {
+        // Animate Camera Position
+        gsap.to(camera.position, {
+            x: currentStep.cameraPosition[0],
+            y: currentStep.cameraPosition[1],
+            z: currentStep.cameraPosition[2],
+            duration: 2,
+            ease: "power2.inOut"
+        });
+
+        // Animate LookAt Target
+        gsap.to(tourTargetRef.current, {
+            x: currentStep.cameraTarget[0],
+            y: currentStep.cameraTarget[1],
+            z: currentStep.cameraTarget[2],
+            duration: 2,
+            ease: "power2.inOut",
+        });
+    }
+  }, [isTourActive, currentStep, camera]);
+
 
   useFrame((state) => {
-    const t = state.clock.getElapsedTime();
-    const driftX = Math.sin(t * 0.1) * 2;
-    const driftY = Math.cos(t * 0.15) * 1;
-    const mouseX = (mouse.x * 3);
-    const mouseY = (mouse.y * 1.5);
-    state.camera.position.x = THREE.MathUtils.lerp(state.camera.position.x, driftX + mouseX, 0.02);
-    state.camera.position.y = THREE.MathUtils.lerp(state.camera.position.y, driftY + mouseY, 0.02);
-    state.camera.lookAt(driftX * 0.3, driftY * 0.3, -20);
+    if (isTourActive) {
+        // During tour, look at the interpolated target
+        state.camera.lookAt(tourTargetRef.current);
+    } else {
+        // Normal drift behavior
+        const t = state.clock.getElapsedTime();
+        const driftX = Math.sin(t * 0.1) * 2;
+        const driftY = Math.cos(t * 0.15) * 1;
+        const mouseX = (mouse.x * 3);
+        const mouseY = (mouse.y * 1.5);
+        state.camera.position.x = THREE.MathUtils.lerp(state.camera.position.x, driftX + mouseX, 0.02);
+        state.camera.position.y = THREE.MathUtils.lerp(state.camera.position.y, driftY + mouseY, 0.02);
+        state.camera.lookAt(driftX * 0.3, driftY * 0.3, -20);
+    }
   });
 
   return (
