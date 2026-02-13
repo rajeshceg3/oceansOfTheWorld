@@ -1,13 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Volume2, VolumeX } from 'lucide-react';
-import { useOceanSound } from '../hooks/useOceanSound';
+import { Volume2, VolumeX, Compass } from 'lucide-react';
+import { useTour } from '../contexts/TourContext';
 
-const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange, isLoading }) => {
+const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange, isLoading, isSoundOn, setIsSoundOn, playTourSound }) => {
   const [isIdle, setIsIdle] = useState(false);
   const lastActivityRef = useRef(null);
-  const [isSoundOn, setIsSoundOn] = useState(false);
-
-  useOceanSound(isSoundOn, currentOceanIndex);
+  const { startTour, isTourActive, currentStep } = useTour();
 
   useEffect(() => {
     if (lastActivityRef.current === null) {
@@ -39,7 +37,9 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange, isLoading }) => {
     };
   }, []);
 
-  const shouldHide = isIdle || isLoading;
+  const shouldHide = (isIdle || isLoading) && !isTourActive;
+  const isNavHighlighted = isTourActive && currentStep?.highlight === 'navigation';
+  const isAudioHighlighted = isTourActive && currentStep?.highlight === 'audio';
 
   return (
     <>
@@ -80,6 +80,7 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange, isLoading }) => {
             pointer-events-auto transition-all duration-500
             hover:bg-white/10 hover:border-white/20 hover:shadow-[0_0_30px_rgba(255,255,255,0.1)]
             shadow-2xl ${shouldHide ? 'pointer-events-none' : ''}
+            ${isNavHighlighted ? 'ring-2 ring-white shadow-[0_0_50px_rgba(255,255,255,0.2)] bg-white/20 scale-105' : ''}
         `}>
           {oceans.map((ocean, index) => (
             <button
@@ -120,11 +121,26 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange, isLoading }) => {
         </div>
       </div>
 
-      {/* Top Right Info */}
-      <div className={`absolute top-6 right-6 md:top-10 md:right-10 text-right pointer-events-none transition-all duration-[2000ms] ${shouldHide ? 'opacity-0 -translate-y-4' : 'opacity-100 translate-y-0'}`}>
+      {/* Top Right Info & Tour Button */}
+      <div className={`absolute top-6 right-6 md:top-10 md:right-10 flex flex-col items-end space-y-4 pointer-events-none transition-all duration-[2000ms] ${shouldHide ? 'opacity-0 -translate-y-4' : 'opacity-100 translate-y-0'}`}>
          <p className="text-[9px] md:text-[10px] font-thin text-white/70 tracking-[0.3em] uppercase">
             Immersion Mode
          </p>
+
+         <button
+            onClick={startTour}
+            disabled={isTourActive || shouldHide}
+            className={`
+              flex items-center space-x-2 pointer-events-auto
+              text-[10px] md:text-xs font-light tracking-[0.2em] uppercase text-white/80 hover:text-white
+              bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 rounded-full px-4 py-2
+              transition-all duration-300 outline-none focus-visible:ring-2 focus-visible:ring-white/50
+              ${isTourActive ? 'opacity-0 pointer-events-none' : 'opacity-100'}
+            `}
+          >
+            <Compass size={14} />
+            <span>Guided Tour</span>
+          </button>
       </div>
 
       {/* Sound Control */}
@@ -139,6 +155,7 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange, isLoading }) => {
             outline-none focus-visible:ring-2 focus-visible:ring-white/50 rounded-full p-2
             hover:bg-white/5 backdrop-blur-sm
             ${shouldHide ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'}
+            ${isAudioHighlighted ? 'ring-2 ring-white shadow-[0_0_50px_rgba(255,255,255,0.2)] bg-white/20 scale-110' : ''}
          `}
          aria-label={isSoundOn ? "Mute sound" : "Enable sound"}
          aria-pressed={isSoundOn}

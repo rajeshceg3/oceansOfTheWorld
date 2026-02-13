@@ -1,9 +1,12 @@
 import React, { Suspense, useState, useCallback, lazy, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { useProgress } from '@react-three/drei';
+import { useProgress, useContextBridge } from '@react-three/drei';
 import UIOverlay from './UIOverlay';
 import CustomLoader from './CustomLoader';
 import { OCEANS } from '../data/oceans';
+import { useOceanSound } from '../hooks/useOceanSound';
+import { TourProvider, TourContext } from '../contexts/TourContext';
+import TourOverlay from './TourOverlay';
 
 const OceanScene = lazy(() => import('./OceanScene'));
 
@@ -15,11 +18,64 @@ const LoadingListener = ({ onLoadingChange }) => {
   return null;
 };
 
+const OceanWorldContent = ({
+  activeOcean,
+  targetOceanIndex,
+  handleTransitionComplete,
+  handleOceanChange,
+  isLoading,
+  setIsLoading,
+  isSoundOn,
+  setIsSoundOn,
+  playTourSound
+}) => {
+  const ContextBridge = useContextBridge(TourContext);
+
+  return (
+    <>
+      <Canvas
+        camera={{ position: [0, 0, 15], fov: 45 }}
+        dpr={[1, 2]} // Optimize for mobile
+        gl={{
+            antialias: false,
+            toneMappingExposure: 0.9,
+            powerPreference: "high-performance"
+        }}
+        aria-label="3D Ocean View"
+        role="img"
+      >
+        <ContextBridge>
+            <Suspense fallback={<CustomLoader />}>
+                <OceanScene
+                    ocean={activeOcean}
+                    onTransitionComplete={handleTransitionComplete}
+                />
+                <LoadingListener onLoadingChange={setIsLoading} />
+            </Suspense>
+        </ContextBridge>
+      </Canvas>
+      <UIOverlay
+        oceans={OCEANS}
+        currentOceanIndex={targetOceanIndex} // Update UI immediately for responsiveness
+        onOceanChange={handleOceanChange}
+        isLoading={isLoading}
+        isSoundOn={isSoundOn}
+        setIsSoundOn={setIsSoundOn}
+        playTourSound={playTourSound}
+      />
+      <TourOverlay />
+    </>
+  );
+};
+
 const OceanWorld = () => {
   const [currentOceanIndex, setCurrentOceanIndex] = useState(0);
   const [targetOceanIndex, setTargetOceanIndex] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSoundOn, setIsSoundOn] = useState(false);
+
+  const { playTourSound } = useOceanSound(isSoundOn, targetOceanIndex);
 
   const handleOceanChange = (index) => {
     if (index !== currentOceanIndex && !isTransitioning) {
@@ -41,62 +97,22 @@ const OceanWorld = () => {
     setIsTransitioning(false);
   }, [targetOceanIndex]);
 
-  // We pass targetOceanIndex to OceanScene so it can animate TO it.
-  // Wait, the previous logic was: set target, transition starts, timeout, set current.
-  // OceanScene receives `ocean` prop.
-  // If we pass `OCEANS[targetOceanIndex]` to OceanScene immediately, it will render the new creatures immediately?
-  // We want the environment (colors, fog) to transition, and maybe the creatures too?
-  // If we switch `ocean` prop, the components inside `OceanScene` (like Creatures) will re-render with new types.
-  // If we want a smooth transition, we might need to handle creature unmounting/mounting gracefully.
-  // However, the current requirement is to fix the architectural flaw of using setTimeout.
-  // If we pass the NEW ocean config to OceanScene, GSAP will animate the environment colors to it.
-  // The creatures will switch immediately.
-  // To fix this perfectly, we'd need two scenes or complex transition logic.
-  // BUT, for this task, ensuring the state sync relies on the animation completion is the goal.
-  // So we pass `OCEANS[targetOceanIndex]` to OceanScene. It animates colors.
-  // When animation completes, `onTransitionComplete` fires.
-  // `isTransitioning` is mostly for UI blocking.
-
-  // Actually, if we update `currentOceanIndex` only after transition, then `OCEANS[currentOceanIndex]` is the OLD ocean until transition ends.
-  // That means OceanScene receives OLD ocean until transition ends?
-  // No, that would mean it doesn't animate until transition ends.
-  // It must receive the NEW ocean to animate TO it.
-
-  // So `OceanScene` should receive `OCEANS[targetOceanIndex]`.
-  // And `currentOceanIndex` (used for UI text?) should probably update either immediately or after.
-  // If UI updates immediately (which it does via `targetOceanIndex` in `UIOverlay`), that's fine.
-  // `currentOceanIndex` in this component seems to be "the confirmed ocean".
-
   const activeOcean = OCEANS[targetOceanIndex];
 
   return (
-    <>
-      <Canvas
-        camera={{ position: [0, 0, 15], fov: 45 }}
-        dpr={[1, 2]} // Optimize for mobile
-        gl={{
-            antialias: false, // Post-processing often handles AA better or makes it unnecessary, saving perf
-            toneMappingExposure: 0.9,
-            powerPreference: "high-performance"
-        }}
-        aria-label="3D Ocean View"
-        role="img"
-      >
-        <Suspense fallback={<CustomLoader />}>
-            <OceanScene
-                ocean={activeOcean}
-                onTransitionComplete={handleTransitionComplete}
-            />
-            <LoadingListener onLoadingChange={setIsLoading} />
-        </Suspense>
-      </Canvas>
-      <UIOverlay
-        oceans={OCEANS}
-        currentOceanIndex={targetOceanIndex} // Update UI immediately for responsiveness
-        onOceanChange={handleOceanChange}
+    <TourProvider playTourSound={playTourSound}>
+      <OceanWorldContent
+        activeOcean={activeOcean}
+        targetOceanIndex={targetOceanIndex}
+        handleTransitionComplete={handleTransitionComplete}
+        handleOceanChange={handleOceanChange}
         isLoading={isLoading}
+        setIsLoading={setIsLoading}
+        isSoundOn={isSoundOn}
+        setIsSoundOn={setIsSoundOn}
+        playTourSound={playTourSound}
       />
-    </>
+    </TourProvider>
   );
 };
 
