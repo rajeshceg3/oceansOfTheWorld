@@ -3,12 +3,13 @@ import { OCEANS } from '../data/oceans';
 
 // "Ultrathink" Audio Engine: High-fidelity procedural ocean synthesis
 // Layers:
+// 0. Sub Bass (Physical Presence) - Clean Sine for chest resonance
 // 1. Deep (Rumble/Sub) - Stereo Brown Noise with slow panning
 // 2. Surface (Swell/Waves) - Stereo Pink Noise with phase-offset LFOs
 // 3. Texture (Sparkle/Ice/Bubbles) - High-passed White Noise + Random Envelope / Granular Simulation
 // 4. Drone (Tonal Ambience) - Multi-Oscillator Cluster (Base, Detune, Harmonic)
 // 5. Binaural (Brainwave Entrainment) - Left/Right Frequency Delta for Alpha/Theta waves
-// 6. Bio (Life) - Procedural Marine Creatures (Whales, Clicks, Chirps)
+// 6. Bio (Life) - Procedural Marine Creatures (Whales, Clicks, Chirps) - FM Synthesis
 // 7. Swell (Movement) - Very slow amplitude modulation (breathing)
 
 const AUDIO_PROFILES = {
@@ -18,7 +19,8 @@ const AUDIO_PROFILES = {
     textureMix: 0.15,
     droneFreq: 55, // A1
     harmonic: 1.5, // 5th
-    verbDecay: 4,
+    subBassFreq: 40,
+    verbDecay: 5,
     binauralDelta: 7.83, // Schumann Resonance (Relaxed Alertness)
     detune: 5, // Cents
     windFreq: 400,
@@ -39,7 +41,8 @@ const AUDIO_PROFILES = {
     textureMix: 0.35,
     droneFreq: 110, // A2
     harmonic: 1.25, // Major 3rd
-    verbDecay: 2.5,
+    subBassFreq: 45,
+    verbDecay: 3.5,
     binauralDelta: 10, // Alpha (Calm focus)
     detune: 8,
     windFreq: 700,
@@ -60,7 +63,8 @@ const AUDIO_PROFILES = {
     textureMix: 0.25,
     droneFreq: 146.83, // D3
     harmonic: 1.5,
-    verbDecay: 3.5,
+    subBassFreq: 38,
+    verbDecay: 4.5,
     binauralDelta: 6, // Theta (Deep relaxation)
     detune: 6,
     windFreq: 500,
@@ -81,7 +85,8 @@ const AUDIO_PROFILES = {
     textureMix: 0.6,
     droneFreq: 220, // A3
     harmonic: 2.0, // Octave
-    verbDecay: 5,
+    subBassFreq: 50,
+    verbDecay: 6,
     binauralDelta: 4, // Low Theta (Dreamy)
     detune: 12,
     windFreq: 1000,
@@ -102,7 +107,8 @@ const AUDIO_PROFILES = {
     textureMix: 0.8,
     droneFreq: 440, // A4
     harmonic: 2.0,
-    verbDecay: 6,
+    subBassFreq: 35,
+    verbDecay: 8,
     binauralDelta: 14, // Beta (Focus/Alert)
     detune: 10,
     windFreq: 1500,
@@ -152,8 +158,9 @@ const createImpulseResponse = (ctx, duration, decay) => {
     right[i] = (Math.random() * 2 - 1) * amp * 0.8; // Slightly quieter right for imbalance/width
 
     // Add some early reflections logic (very simple delay simulation)
-    if (i > 1000 && i < 2000) {
-        left[i] += (Math.random() * 2 - 1) * 0.5 * amp;
+    if (i > 1000 && i < 5000) {
+        left[i] += (Math.random() * 2 - 1) * 0.3 * amp;
+        right[i] += (Math.random() * 2 - 1) * 0.3 * amp;
     }
   }
   return impulse;
@@ -188,16 +195,39 @@ const createNoiseBuffer = (ctx) => {
 const triggerGrain = (ctx, destination, params, time) => {
     const { type, freqBase, mix } = params;
 
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
     const panner = ctx.createStereoPanner();
-
-    // Randomize
-    const freq = freqBase * (0.9 + Math.random() * 0.2);
     const pan = Math.random() * 1.5 - 0.75; // Spread
+    panner.pan.value = pan;
+    panner.connect(destination);
+
     const duration = 0.05 + Math.random() * 0.15;
 
-    panner.pan.value = pan;
+    if (type === 'shimmer') {
+        // Multiple detuned sine waves for chorus/shimmer effect
+        const baseFreq = freqBase * (1 + Math.random() * 0.5);
+        const oscs = [-0.01, 0, 0.01].map(detune => {
+             const osc = ctx.createOscillator();
+             osc.type = 'sine';
+             osc.frequency.value = baseFreq * (1 + detune);
+
+             const gain = ctx.createGain();
+             gain.gain.setValueAtTime(0, time);
+             gain.gain.linearRampToValueAtTime(mix * 0.2, time + duration * 0.5);
+             gain.gain.linearRampToValueAtTime(0, time + duration);
+
+             osc.connect(gain);
+             gain.connect(panner);
+             osc.start(time);
+             osc.stop(time + duration + 0.1);
+             return osc;
+        });
+        return;
+    }
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    // Randomize
+    const freq = freqBase * (0.9 + Math.random() * 0.2);
 
     if (type === 'bubble') {
         osc.type = 'sine';
@@ -219,7 +249,7 @@ const triggerGrain = (ctx, destination, params, time) => {
         gain.gain.setValueAtTime(0, time);
         gain.gain.linearRampToValueAtTime(mix, time + 0.005);
         gain.gain.exponentialRampToValueAtTime(0.001, time + duration * 0.4);
-    } else { // shimmer or default
+    } else { // default fallback
         osc.type = 'sine';
         osc.frequency.setValueAtTime(freq * 1.2, time);
         gain.gain.setValueAtTime(0, time);
@@ -229,7 +259,6 @@ const triggerGrain = (ctx, destination, params, time) => {
 
     osc.connect(gain);
     gain.connect(panner);
-    panner.connect(destination);
 
     osc.start(time);
     osc.stop(time + duration + 0.2);
@@ -240,64 +269,95 @@ const triggerBioSound = (ctx, destination, params, time) => {
     // Density acts as probability check caller side, but here we can use it for intensity
     const mix = 0.2; // Base volume for bio sounds
 
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
     const panner = ctx.createStereoPanner();
     const pan = Math.random() * 1.8 - 0.9; // Wide spread
-
     panner.pan.value = pan;
+    panner.connect(destination);
 
     if (bioType === 'whale') {
-        const duration = 2 + Math.random() * 3;
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(bioFreqBase, time);
-        // Slow sweep up or down
-        const endFreq = bioFreqBase * (0.8 + Math.random() * 0.4);
-        osc.frequency.exponentialRampToValueAtTime(endFreq, time + duration);
+        // High-Fidelity FM Whale Call
+        const duration = 3 + Math.random() * 4;
 
-        gain.gain.setValueAtTime(0, time);
-        gain.gain.linearRampToValueAtTime(mix * 1.5, time + duration * 0.2);
-        gain.gain.linearRampToValueAtTime(mix, time + duration * 0.8);
-        gain.gain.linearRampToValueAtTime(0, time + duration);
+        const carrier = ctx.createOscillator();
+        const modulator = ctx.createOscillator();
+        const modGain = ctx.createGain();
+        const mainGain = ctx.createGain();
 
-        osc.start(time);
-        osc.stop(time + duration + 0.5);
+        carrier.type = 'triangle'; // Richer carrier than sine
+        modulator.type = 'sine';
+
+        // Carrier Frequency Sweep
+        carrier.frequency.setValueAtTime(bioFreqBase, time);
+        carrier.frequency.exponentialRampToValueAtTime(bioFreqBase * 0.7, time + duration);
+
+        // Modulator Setup (Harmonic relationship)
+        modulator.frequency.value = bioFreqBase * 1.5;
+
+        // FM Amount Envelope
+        modGain.gain.setValueAtTime(30, time);
+        modGain.gain.linearRampToValueAtTime(10, time + duration);
+
+        modulator.connect(modGain);
+        modGain.connect(carrier.frequency);
+
+        // Main Amplitude Envelope
+        mainGain.gain.setValueAtTime(0, time);
+        mainGain.gain.linearRampToValueAtTime(mix, time + duration * 0.2);
+        mainGain.gain.linearRampToValueAtTime(mix * 0.8, time + duration * 0.6);
+        mainGain.gain.linearRampToValueAtTime(0, time + duration);
+
+        carrier.connect(mainGain);
+        mainGain.connect(panner);
+
+        carrier.start(time);
+        modulator.start(time);
+        carrier.stop(time + duration + 0.5);
+        modulator.stop(time + duration + 0.5);
+
+        return;
 
     } else if (bioType === 'click') {
-        // Clicks are often short bursts of noise or high freq sine
-        const duration = 0.01;
-        const clicks = Math.floor(Math.random() * 5) + 3; // Burst of 3-8 clicks
+        // Enhanced Clicks
+        const clicks = Math.floor(Math.random() * 5) + 3;
 
         for(let i=0; i<clicks; i++) {
              const t = time + i * (0.05 + Math.random() * 0.05);
              const oscClick = ctx.createOscillator();
              const gainClick = ctx.createGain();
-             oscClick.frequency.value = bioFreqBase + Math.random() * 1000;
+
+             // High frequency sine bursts
+             oscClick.frequency.value = bioFreqBase + Math.random() * 1500;
              oscClick.type = 'sine';
 
              gainClick.gain.setValueAtTime(mix, t);
-             gainClick.gain.exponentialRampToValueAtTime(0.001, t + 0.01);
+             gainClick.gain.exponentialRampToValueAtTime(0.001, t + 0.015);
 
              oscClick.connect(gainClick);
-             gainClick.connect(panner); // Shared panner
+             gainClick.connect(panner);
              oscClick.start(t);
              oscClick.stop(t + 0.05);
         }
-        // No main osc
         return;
 
     } else if (bioType === 'chirp') {
-        const duration = 0.1 + Math.random() * 0.1;
+        const duration = 0.15 + Math.random() * 0.1;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
         osc.type = 'sine';
         osc.frequency.setValueAtTime(bioFreqBase, time);
-        osc.frequency.linearRampToValueAtTime(bioFreqBase * 2, time + duration);
+        // Fast sweep up
+        osc.frequency.linearRampToValueAtTime(bioFreqBase * 2.5, time + duration);
 
         gain.gain.setValueAtTime(0, time);
         gain.gain.linearRampToValueAtTime(mix, time + duration * 0.1);
         gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
 
+        osc.connect(gain);
+        gain.connect(panner);
         osc.start(time);
         osc.stop(time + duration + 0.1);
+        return;
 
     } else if (bioType === 'ice-crack') {
         // High passed noise burst
@@ -308,25 +368,18 @@ const triggerBioSound = (ctx, destination, params, time) => {
         filter.type = 'highpass';
         filter.frequency.value = 800;
 
+        const gain = ctx.createGain();
         gain.gain.setValueAtTime(mix * 1.2, time);
         gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
 
         bufferSrc.connect(filter);
         filter.connect(gain);
-        // gain connected to panner below
+        gain.connect(panner);
 
         bufferSrc.start(time);
         bufferSrc.stop(time + duration + 0.1);
-
-        // Skip osc connect
-        gain.connect(panner);
-        panner.connect(destination);
         return;
     }
-
-    osc.connect(gain);
-    gain.connect(panner);
-    panner.connect(destination);
 };
 
 export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
@@ -343,6 +396,11 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
     const oceanId = OCEANS[oceanIndex]?.id || 'pacific';
     const profile = AUDIO_PROFILES[oceanId] || AUDIO_PROFILES.pacific;
     const nodes = nodesRef.current;
+
+    // --- Sub Bass Layer ---
+    if (nodes.subOsc) {
+        nodes.subOsc.frequency.setTargetAtTime(profile.subBassFreq, now, rampTime);
+    }
 
     // --- Deep Layer ---
     nodes.deepFilter.frequency.setTargetAtTime(profile.baseFreq, now, rampTime);
@@ -418,7 +476,8 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
 
         // Reverb (Convolution) - Stereo
         const convolver = ctx.createConvolver();
-        convolver.buffer = createImpulseResponse(ctx, 4, 2.5);
+        // Use initial decay from pacific profile
+        convolver.buffer = createImpulseResponse(ctx, 4, 4);
         const reverbGain = ctx.createGain();
         reverbGain.gain.value = 0.4;
         convolver.connect(reverbGain);
@@ -428,6 +487,18 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         const dryGain = ctx.createGain();
         dryGain.gain.value = 0.7;
         dryGain.connect(compressor);
+
+        // -------------------------
+        // LAYER 0: Sub Bass (Physical Presence)
+        // -------------------------
+        const subOsc = ctx.createOscillator();
+        subOsc.type = 'sine';
+        subOsc.frequency.value = 40; // Default
+        const subGain = ctx.createGain();
+        subGain.gain.value = 0.25;
+        subOsc.connect(subGain);
+        subGain.connect(masterGain); // Direct to master to avoid muddying reverb
+        subOsc.start();
 
         // -------------------------
         // LAYER 1: Deep (Rumble) - Stereo
@@ -782,6 +853,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
 
         // Store nodes
         nodesRef.current = {
+            subOsc, subGain,
             deepFilter, deepLFO, deepLFOGain,
             surfaceFilter, surfaceLFO, surfaceLFOGain,
             textureFilter, textureGain,
