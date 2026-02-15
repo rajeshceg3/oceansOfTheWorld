@@ -101,6 +101,12 @@ window.AudioContext = class AudioContext {
             connect: vi.fn(),
             disconnect: vi.fn(),
         });
+        this.createWaveShaper = () => ({
+            curve: null,
+            oversample: 'none',
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+        });
         this.resume = vi.fn().mockResolvedValue();
         this.close = vi.fn().mockResolvedValue();
     }
