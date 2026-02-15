@@ -7,10 +7,11 @@ import { OCEANS } from '../data/oceans';
 // 1. Deep (Rumble/Sub) - Stereo Brown Noise with slow panning
 // 2. Surface (Swell/Waves) - Stereo Pink Noise with phase-offset LFOs
 // 3. Texture (Sparkle/Ice/Bubbles) - High-passed White Noise + Random Envelope / Granular Simulation
-// 4. Drone (Tonal Ambience) - Multi-Oscillator Cluster (Base, Detune, Harmonic)
+// 4. Drone (Tonal Ambience) - Multi-Oscillator Cluster + Formant Filters (Vowel Tones)
 // 5. Binaural (Brainwave Entrainment) - Left/Right Frequency Delta for Alpha/Theta waves
-// 6. Bio (Life) - Procedural Marine Creatures (Whales, Clicks, Chirps) - FM Synthesis
+// 6. Bio (Life) - Procedural Marine Creatures (Whales, Clicks, Chirps, Schools) - Complex FM Synthesis
 // 7. Swell (Movement) - Very slow amplitude modulation (breathing)
+// 8. Saturation (Warmth) - Analog tube simulation via WaveShaping
 
 const AUDIO_PROFILES = {
   pacific: {
@@ -33,7 +34,9 @@ const AUDIO_PROFILES = {
     grainDensity: 0.8,
     grainType: 'bubble',
     grainFreqBase: 400,
-    grainMix: 0.3
+    grainMix: 0.3,
+    saturationAmount: 20, // Subtle warmth
+    formantMix: 0.2 // Mild vowel character
   },
   atlantic: {
     baseFreq: 80,
@@ -55,7 +58,9 @@ const AUDIO_PROFILES = {
     grainDensity: 0.5,
     grainType: 'shimmer',
     grainFreqBase: 800,
-    grainMix: 0.25
+    grainMix: 0.25,
+    saturationAmount: 35, // Crisper
+    formantMix: 0.1
   },
   indian: {
     baseFreq: 70,
@@ -71,13 +76,15 @@ const AUDIO_PROFILES = {
     windGain: 0.1,
     swellRate: 0.08,
     swellDepth: 0.12,
-    bioType: 'chirp',
-    bioDensity: 0.25,
-    bioFreqBase: 800,
+    bioType: 'school', // New type
+    bioDensity: 0.6,
+    bioFreqBase: 600,
     grainDensity: 0.4,
     grainType: 'droplet',
     grainFreqBase: 600,
-    grainMix: 0.25
+    grainMix: 0.25,
+    saturationAmount: 50, // Rich/Hot
+    formantMix: 0.4 // Strong vowel resonance (Om-like)
   },
   southern: {
     baseFreq: 90,
@@ -99,7 +106,9 @@ const AUDIO_PROFILES = {
     grainDensity: 0.3,
     grainType: 'ice',
     grainFreqBase: 2000,
-    grainMix: 0.4
+    grainMix: 0.4,
+    saturationAmount: 15, // Cold/Clean
+    formantMix: 0.15
   },
   arctic: {
     baseFreq: 100,
@@ -121,8 +130,24 @@ const AUDIO_PROFILES = {
     grainDensity: 0.6,
     grainType: 'ice',
     grainFreqBase: 3000,
-    grainMix: 0.5
+    grainMix: 0.5,
+    saturationAmount: 40, // Harsh/Biting
+    formantMix: 0.05
   }
+};
+
+const createSaturationCurve = (amount) => {
+  const k = typeof amount === 'number' ? amount : 50;
+  const n_samples = 44100;
+  const curve = new Float32Array(n_samples);
+  const deg = Math.PI / 180;
+
+  for (let i = 0; i < n_samples; ++i) {
+    const x = i * 2 / n_samples - 1;
+    // Sigmoid curve for soft clipping
+    curve[i] = (3 + k) * x * 20 * deg / (Math.PI + k * Math.abs(x));
+  }
+  return curve;
 };
 
 const createBrownNoiseBuffer = (ctx) => {
@@ -155,12 +180,12 @@ const createImpulseResponse = (ctx, duration, decay) => {
     const amp = Math.pow(1 - n, decay);
     // Decorrelate channels for wider stereo
     left[i] = (Math.random() * 2 - 1) * amp;
-    right[i] = (Math.random() * 2 - 1) * amp * 0.8; // Slightly quieter right for imbalance/width
+    right[i] = (Math.random() * 2 - 1) * amp * 0.8;
 
-    // Add some early reflections logic (very simple delay simulation)
-    if (i > 1000 && i < 5000) {
-        left[i] += (Math.random() * 2 - 1) * 0.3 * amp;
-        right[i] += (Math.random() * 2 - 1) * 0.3 * amp;
+    // Early reflections
+    if (i > 1000 && i < 8000) {
+        left[i] += (Math.random() * 2 - 1) * 0.4 * amp;
+        right[i] += (Math.random() * 2 - 1) * 0.4 * amp;
     }
   }
   return impulse;
@@ -168,11 +193,11 @@ const createImpulseResponse = (ctx, duration, decay) => {
 
 const createNoiseBuffer = (ctx) => {
   const bufferSize = 4 * ctx.sampleRate;
-  const buffer = ctx.createBuffer(2, bufferSize, ctx.sampleRate); // Stereo buffer
+  const buffer = ctx.createBuffer(2, bufferSize, ctx.sampleRate);
   const left = buffer.getChannelData(0);
   const right = buffer.getChannelData(1);
 
-  // Pink Noise Approximation for both channels independently for width
+  // Pink Noise Approximation
   [left, right].forEach(data => {
     let b0, b1, b2, b3, b4, b5, b6;
     b0 = b1 = b2 = b3 = b4 = b5 = b6 = 0.0;
@@ -196,37 +221,44 @@ const triggerGrain = (ctx, destination, params, time) => {
     const { type, freqBase, mix } = params;
 
     const panner = ctx.createStereoPanner();
-    const pan = Math.random() * 1.5 - 0.75; // Spread
+    const pan = Math.random() * 1.5 - 0.75;
     panner.pan.value = pan;
     panner.connect(destination);
 
     const duration = 0.05 + Math.random() * 0.15;
 
     if (type === 'shimmer') {
-        // Multiple detuned sine waves for chorus/shimmer effect
+        // High-Fidelity Shimmer: 5-voice detuned cluster
         const baseFreq = freqBase * (1 + Math.random() * 0.5);
-        const oscs = [-0.01, 0, 0.01].map(detune => {
+        // Pentatonic-ish spread or just cluster
+        const detunes = [-0.02, -0.01, 0, 0.01, 0.02];
+
+        detunes.forEach((detune, i) => {
              const osc = ctx.createOscillator();
-             osc.type = 'sine';
+             osc.type = i % 2 === 0 ? 'sine' : 'triangle'; // Mix waveforms
              osc.frequency.value = baseFreq * (1 + detune);
 
              const gain = ctx.createGain();
              gain.gain.setValueAtTime(0, time);
-             gain.gain.linearRampToValueAtTime(mix * 0.2, time + duration * 0.5);
+             gain.gain.linearRampToValueAtTime(mix * 0.15, time + duration * 0.5);
              gain.gain.linearRampToValueAtTime(0, time + duration);
 
+             // Slight spread for each voice
+             const voicePanner = ctx.createStereoPanner();
+             voicePanner.pan.value = (Math.random() * 0.4 - 0.2);
+
              osc.connect(gain);
-             gain.connect(panner);
+             gain.connect(voicePanner);
+             voicePanner.connect(panner); // Connect to main grain panner (or destination)
+
              osc.start(time);
              osc.stop(time + duration + 0.1);
-             return osc;
         });
         return;
     }
 
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    // Randomize
     const freq = freqBase * (0.9 + Math.random() * 0.2);
 
     if (type === 'bubble') {
@@ -237,11 +269,27 @@ const triggerGrain = (ctx, destination, params, time) => {
         gain.gain.linearRampToValueAtTime(mix, time + duration * 0.1);
         gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
     } else if (type === 'ice') {
-        osc.type = Math.random() > 0.5 ? 'triangle' : 'sine';
+        // Metallic Ring
+        osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(freq * 1.5, time);
+
+        // High Q Filter for ringing
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.Q.value = 15;
+        filter.frequency.value = freq * 2;
+
         gain.gain.setValueAtTime(0, time);
-        gain.gain.linearRampToValueAtTime(mix * 0.8, time + 0.01);
-        gain.gain.exponentialRampToValueAtTime(0.001, time + duration * 0.5);
+        gain.gain.linearRampToValueAtTime(mix * 0.6, time + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration * 0.8);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(panner);
+
+        osc.start(time);
+        osc.stop(time + duration + 0.2);
+        return;
     } else if (type === 'droplet') {
         osc.type = 'sine';
         osc.frequency.setValueAtTime(freq * 2, time);
@@ -249,7 +297,7 @@ const triggerGrain = (ctx, destination, params, time) => {
         gain.gain.setValueAtTime(0, time);
         gain.gain.linearRampToValueAtTime(mix, time + 0.005);
         gain.gain.exponentialRampToValueAtTime(0.001, time + duration * 0.4);
-    } else { // default fallback
+    } else {
         osc.type = 'sine';
         osc.frequency.setValueAtTime(freq * 1.2, time);
         gain.gain.setValueAtTime(0, time);
@@ -257,87 +305,111 @@ const triggerGrain = (ctx, destination, params, time) => {
         gain.gain.linearRampToValueAtTime(0, time + duration);
     }
 
-    osc.connect(gain);
-    gain.connect(panner);
-
-    osc.start(time);
-    osc.stop(time + duration + 0.2);
+    if (type !== 'ice') {
+        osc.connect(gain);
+        gain.connect(panner);
+        osc.start(time);
+        osc.stop(time + duration + 0.2);
+    }
 };
 
 const triggerBioSound = (ctx, destination, params, time) => {
-    const { bioType, bioFreqBase, bioDensity } = params;
-    // Density acts as probability check caller side, but here we can use it for intensity
-    const mix = 0.2; // Base volume for bio sounds
+    const { bioType, bioFreqBase } = params;
+    const mix = 0.2;
 
     const panner = ctx.createStereoPanner();
-    const pan = Math.random() * 1.8 - 0.9; // Wide spread
+    const pan = Math.random() * 1.8 - 0.9;
     panner.pan.value = pan;
     panner.connect(destination);
 
     if (bioType === 'whale') {
-        // High-Fidelity FM Whale Call
+        // High-Fidelity FM Whale Call (Dual Modulator)
         const duration = 3 + Math.random() * 4;
 
         const carrier = ctx.createOscillator();
-        const modulator = ctx.createOscillator();
-        const modGain = ctx.createGain();
+        const modulator1 = ctx.createOscillator();
+        const modulator2 = ctx.createOscillator();
+
+        const modGain1 = ctx.createGain();
+        const modGain2 = ctx.createGain();
         const mainGain = ctx.createGain();
 
-        carrier.type = 'triangle'; // Richer carrier than sine
-        modulator.type = 'sine';
+        carrier.type = 'triangle';
+        modulator1.type = 'sine';
+        modulator2.type = 'sine';
 
-        // Carrier Frequency Sweep
+        // Carrier Sweep
         carrier.frequency.setValueAtTime(bioFreqBase, time);
         carrier.frequency.exponentialRampToValueAtTime(bioFreqBase * 0.7, time + duration);
 
-        // Modulator Setup (Harmonic relationship)
-        modulator.frequency.value = bioFreqBase * 1.5;
+        // Modulator 1 (Harmonic)
+        modulator1.frequency.value = bioFreqBase * 1.5;
+        modGain1.gain.setValueAtTime(50, time);
+        modGain1.gain.linearRampToValueAtTime(20, time + duration);
 
-        // FM Amount Envelope
-        modGain.gain.setValueAtTime(30, time);
-        modGain.gain.linearRampToValueAtTime(10, time + duration);
+        // Modulator 2 (Sub-harmonic rumble)
+        modulator2.frequency.value = bioFreqBase * 0.5;
+        modGain2.gain.setValueAtTime(10, time);
+        modGain2.gain.linearRampToValueAtTime(0, time + duration * 0.5);
 
-        modulator.connect(modGain);
-        modGain.connect(carrier.frequency);
+        modulator1.connect(modGain1);
+        modGain1.connect(carrier.frequency);
 
-        // Main Amplitude Envelope
+        modulator2.connect(modGain2);
+        modGain2.connect(carrier.frequency);
+
+        // Main Envelope (ADSR-ish)
         mainGain.gain.setValueAtTime(0, time);
-        mainGain.gain.linearRampToValueAtTime(mix, time + duration * 0.2);
-        mainGain.gain.linearRampToValueAtTime(mix * 0.8, time + duration * 0.6);
-        mainGain.gain.linearRampToValueAtTime(0, time + duration);
+        mainGain.gain.linearRampToValueAtTime(mix, time + duration * 0.1);
+        mainGain.gain.setValueAtTime(mix, time + duration * 0.6); // Sustain
+        mainGain.gain.linearRampToValueAtTime(0, time + duration); // Release
 
         carrier.connect(mainGain);
         mainGain.connect(panner);
 
         carrier.start(time);
-        modulator.start(time);
+        modulator1.start(time);
+        modulator2.start(time);
         carrier.stop(time + duration + 0.5);
-        modulator.stop(time + duration + 0.5);
-
-        return;
+        modulator1.stop(time + duration + 0.5);
+        modulator2.stop(time + duration + 0.5);
 
     } else if (bioType === 'click') {
-        // Enhanced Clicks
+        // Organic Clicks (Filtered Noise + Sine)
         const clicks = Math.floor(Math.random() * 5) + 3;
 
         for(let i=0; i<clicks; i++) {
              const t = time + i * (0.05 + Math.random() * 0.05);
+
+             // Sine burst
              const oscClick = ctx.createOscillator();
              const gainClick = ctx.createGain();
-
-             // High frequency sine bursts
              oscClick.frequency.value = bioFreqBase + Math.random() * 1500;
              oscClick.type = 'sine';
-
              gainClick.gain.setValueAtTime(mix, t);
-             gainClick.gain.exponentialRampToValueAtTime(0.001, t + 0.015);
-
+             gainClick.gain.exponentialRampToValueAtTime(0.001, t + 0.01);
              oscClick.connect(gainClick);
              gainClick.connect(panner);
              oscClick.start(t);
              oscClick.stop(t + 0.05);
+
+             // Noise burst (for texture)
+             const noise = ctx.createBufferSource();
+             noise.buffer = createNoiseBuffer(ctx);
+             const noiseGain = ctx.createGain();
+             const noiseFilter = ctx.createBiquadFilter();
+             noiseFilter.type = 'bandpass';
+             noiseFilter.frequency.value = 3000 + Math.random() * 2000;
+
+             noiseGain.gain.setValueAtTime(mix * 0.5, t);
+             noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.005);
+
+             noise.connect(noiseFilter);
+             noiseFilter.connect(noiseGain);
+             noiseGain.connect(panner);
+             noise.start(t);
+             noise.stop(t + 0.05);
         }
-        return;
 
     } else if (bioType === 'chirp') {
         const duration = 0.15 + Math.random() * 0.1;
@@ -346,7 +418,6 @@ const triggerBioSound = (ctx, destination, params, time) => {
 
         osc.type = 'sine';
         osc.frequency.setValueAtTime(bioFreqBase, time);
-        // Fast sweep up
         osc.frequency.linearRampToValueAtTime(bioFreqBase * 2.5, time + duration);
 
         gain.gain.setValueAtTime(0, time);
@@ -357,10 +428,8 @@ const triggerBioSound = (ctx, destination, params, time) => {
         gain.connect(panner);
         osc.start(time);
         osc.stop(time + duration + 0.1);
-        return;
 
     } else if (bioType === 'ice-crack') {
-        // High passed noise burst
         const duration = 0.3 + Math.random() * 0.4;
         const bufferSrc = ctx.createBufferSource();
         bufferSrc.buffer = createNoiseBuffer(ctx);
@@ -378,7 +447,36 @@ const triggerBioSound = (ctx, destination, params, time) => {
 
         bufferSrc.start(time);
         bufferSrc.stop(time + duration + 0.1);
-        return;
+
+    } else if (bioType === 'school') {
+        // Granular Swarm
+        const count = 15;
+        const swarmDuration = 2;
+
+        for(let i=0; i<count; i++) {
+            const t = time + Math.random() * swarmDuration;
+            const grainDur = 0.1 + Math.random() * 0.1;
+
+            const osc = ctx.createOscillator();
+            const gGain = ctx.createGain();
+            const gPanner = ctx.createStereoPanner();
+
+            osc.frequency.value = bioFreqBase * (0.8 + Math.random() * 0.4);
+            osc.type = Math.random() > 0.5 ? 'sine' : 'triangle';
+
+            gPanner.pan.value = (Math.random() * 2 - 1) * 0.5; // Narrower spread
+
+            gGain.gain.setValueAtTime(0, t);
+            gGain.gain.linearRampToValueAtTime(mix * 0.3, t + grainDur * 0.5);
+            gGain.gain.linearRampToValueAtTime(0, t + grainDur);
+
+            osc.connect(gGain);
+            gGain.connect(gPanner);
+            gPanner.connect(destination); // Route to main bio bus (which is panned)
+
+            osc.start(t);
+            osc.stop(t + grainDur + 0.1);
+        }
     }
 };
 
@@ -427,6 +525,11 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
     nodes.droneDetune2.frequency.setTargetAtTime(profile.droneFreq - (profile.detune/100), now, rampTime);
     nodes.droneHarmonic.frequency.setTargetAtTime(profile.droneFreq * profile.harmonic, now, rampTime);
 
+    // --- Formant Filter Mix ---
+    if (nodes.formantGain) {
+        nodes.formantGain.gain.setTargetAtTime(profile.formantMix, now, rampTime);
+    }
+
     // --- Binaural Layer ---
     nodes.binauralLeft.frequency.setTargetAtTime(profile.droneFreq, now, rampTime);
     nodes.binauralRight.frequency.setTargetAtTime(profile.droneFreq + profile.binauralDelta, now, rampTime);
@@ -436,6 +539,12 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         nodes.swellLFO.frequency.setTargetAtTime(profile.swellRate, now, rampTime);
         nodes.swellGain.gain.setTargetAtTime(profile.swellDepth, now, rampTime);
     }
+
+    // --- Saturation ---
+    // If we want to dynamically update curve we need to recalculate, but simple param updates
+    // usually involve gain or specific node params. WaveShaper curve is expensive to set.
+    // Instead we can just drive into it harder if needed, but here we assume fixed curve per session
+    // or we could swap it. For now, let's just stick to initial config or maybe create a gain before it.
 
     // --- Granular & Bio Engine Params ---
     if (nodes.granularParams) {
@@ -474,34 +583,39 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         compressor.release.value = 0.25;
         compressor.connect(masterGain);
 
-        // Reverb (Convolution) - Stereo
+        // Saturation (Warmth)
+        const saturator = ctx.createWaveShaper();
+        saturator.curve = createSaturationCurve(40); // Default amount
+        saturator.oversample = '4x';
+        saturator.connect(compressor);
+
+        // Reverb (Convolution)
         const convolver = ctx.createConvolver();
-        // Use initial decay from pacific profile
         convolver.buffer = createImpulseResponse(ctx, 4, 4);
         const reverbGain = ctx.createGain();
         reverbGain.gain.value = 0.4;
         convolver.connect(reverbGain);
-        reverbGain.connect(compressor);
+        reverbGain.connect(saturator); // Send wet to saturator
 
         // Dry Bus
         const dryGain = ctx.createGain();
         dryGain.gain.value = 0.7;
-        dryGain.connect(compressor);
+        dryGain.connect(saturator); // Send dry to saturator
 
         // -------------------------
-        // LAYER 0: Sub Bass (Physical Presence)
+        // LAYER 0: Sub Bass
         // -------------------------
         const subOsc = ctx.createOscillator();
         subOsc.type = 'sine';
-        subOsc.frequency.value = 40; // Default
+        subOsc.frequency.value = 40;
         const subGain = ctx.createGain();
         subGain.gain.value = 0.25;
         subOsc.connect(subGain);
-        subGain.connect(masterGain); // Direct to master to avoid muddying reverb
+        subGain.connect(saturator);
         subOsc.start();
 
         // -------------------------
-        // LAYER 1: Deep (Rumble) - Stereo
+        // LAYER 1: Deep
         // -------------------------
         const deepNoise = ctx.createBufferSource();
         deepNoise.buffer = createBrownNoiseBuffer(ctx);
@@ -524,7 +638,6 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         deepPanner.connect(dryGain);
         deepPanner.connect(convolver);
 
-        // Deep Modulation (LFO)
         const deepLFO = ctx.createOscillator();
         deepLFO.type = 'sine';
         deepLFO.frequency.value = 0.05;
@@ -532,8 +645,8 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         deepLFOGain.gain.value = 40;
         deepLFO.connect(deepLFOGain);
         deepLFOGain.connect(deepFilter.frequency);
+        deepLFO.start();
 
-        // Slow Pan LFO for Deep
         const deepPanLFO = ctx.createOscillator();
         deepPanLFO.type = 'sine';
         deepPanLFO.frequency.value = 0.02;
@@ -541,13 +654,12 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         deepPanGain.gain.value = 0.3;
         deepPanLFO.connect(deepPanGain);
         deepPanGain.connect(deepPanner.pan);
-
-        deepNoise.start();
-        deepLFO.start();
         deepPanLFO.start();
 
+        deepNoise.start();
+
         // -------------------------
-        // LAYER 2: Surface (Swell) - Stereo
+        // LAYER 2: Surface
         // -------------------------
         const surfaceNoise = ctx.createBufferSource();
         surfaceNoise.buffer = createNoiseBuffer(ctx);
@@ -570,7 +682,6 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         surfacePanner.connect(dryGain);
         surfacePanner.connect(convolver);
 
-        // Surface Modulation
         const surfaceLFO = ctx.createOscillator();
         surfaceLFO.type = 'sine';
         surfaceLFO.frequency.value = 0.15;
@@ -578,8 +689,8 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         surfaceLFOGain.gain.value = 150;
         surfaceLFO.connect(surfaceLFOGain);
         surfaceLFOGain.connect(surfaceFilter.frequency);
+        surfaceLFO.start();
 
-        // Surface Pan LFO
         const surfacePanLFO = ctx.createOscillator();
         surfacePanLFO.type = 'sine';
         surfacePanLFO.frequency.value = 0.1;
@@ -587,13 +698,12 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         surfacePanGain.gain.value = 0.5;
         surfacePanLFO.connect(surfacePanGain);
         surfacePanGain.connect(surfacePanner.pan);
-
-        surfaceNoise.start();
-        surfaceLFO.start();
         surfacePanLFO.start();
 
+        surfaceNoise.start();
+
         // -------------------------
-        // LAYER 3: Texture (Sparkle/Bubbles)
+        // LAYER 3: Texture
         // -------------------------
         const textureNoise = ctx.createBufferSource();
         textureNoise.buffer = createNoiseBuffer(ctx);
@@ -608,7 +718,6 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
 
         const texturePanner = ctx.createStereoPanner();
 
-        // Random Bubble LFO
         const bubbleLFO1 = ctx.createOscillator();
         bubbleLFO1.frequency.value = 0.5;
         const bubbleLFO2 = ctx.createOscillator();
@@ -631,7 +740,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         bubbleLFO2.start();
 
         // -------------------------
-        // LAYER 3.5: Wind (High-passed Noise)
+        // LAYER 3.5: Wind
         // -------------------------
         const windNoise = ctx.createBufferSource();
         windNoise.buffer = createNoiseBuffer(ctx);
@@ -646,7 +755,6 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
 
         const windPanner = ctx.createStereoPanner();
 
-        // Wind Gust LFO
         const windLFO = ctx.createOscillator();
         windLFO.frequency.value = 0.1;
         const windLFOGain = ctx.createGain();
@@ -654,15 +762,15 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
 
         windLFO.connect(windLFOGain);
         windLFOGain.connect(windGain.gain);
+        windLFO.start();
 
-        // Wind Pan LFO
         const windPanLFO = ctx.createOscillator();
         windPanLFO.frequency.value = 0.2;
         const windPanGain = ctx.createGain();
         windPanGain.gain.value = 0.6;
-
         windPanLFO.connect(windPanGain);
         windPanGain.connect(windPanner.pan);
+        windPanLFO.start();
 
         windNoise.connect(windFilter);
         windFilter.connect(windGain);
@@ -671,16 +779,13 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         windPanner.connect(convolver);
 
         windNoise.start();
-        windLFO.start();
-        windPanLFO.start();
 
         // -------------------------
-        // LAYER 4: Drone Cluster (The Mind)
+        // LAYER 4: Drone Cluster + Formants
         // -------------------------
         const droneGain = ctx.createGain();
         droneGain.gain.value = 0.15;
 
-        // Breathing LFO
         const droneLFO = ctx.createOscillator();
         droneLFO.type = 'sine';
         droneLFO.frequency.value = 0.08;
@@ -695,43 +800,64 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         droneFilter.type = 'lowpass';
         droneFilter.frequency.value = 400;
 
-        // Base
+        // Base Oscillators
         const droneBase = ctx.createOscillator();
         droneBase.type = 'sine';
         droneBase.frequency.value = 55;
 
-        // Detune 1
         const droneDetune1 = ctx.createOscillator();
         droneDetune1.type = 'triangle';
         droneDetune1.frequency.value = 55.05;
         const pannerD1 = ctx.createStereoPanner();
         pannerD1.pan.value = -0.5;
 
-        // Detune 2
         const droneDetune2 = ctx.createOscillator();
         droneDetune2.type = 'triangle';
         droneDetune2.frequency.value = 54.95;
         const pannerD2 = ctx.createStereoPanner();
         pannerD2.pan.value = 0.5;
 
-        // Harmonic
         const droneHarmonic = ctx.createOscillator();
         droneHarmonic.type = 'sine';
         droneHarmonic.frequency.value = 110;
 
         droneBase.connect(droneGain);
-
         droneDetune1.connect(pannerD1);
         pannerD1.connect(droneGain);
-
         droneDetune2.connect(pannerD2);
         pannerD2.connect(droneGain);
-
         droneHarmonic.connect(droneGain);
 
+        // Formant Filter Bank (Parallel)
+        // A / O / U approximation
+        const formantGain = ctx.createGain();
+        formantGain.gain.value = 0; // Controlled by updateAudioParams
+
+        const f1 = ctx.createBiquadFilter(); // Low formant
+        f1.type = 'bandpass';
+        f1.frequency.value = 300;
+        f1.Q.value = 5;
+
+        const f2 = ctx.createBiquadFilter(); // High formant
+        f2.type = 'bandpass';
+        f2.frequency.value = 800;
+        f2.Q.value = 5;
+
         droneGain.connect(droneFilter);
+
+        // Direct path
         droneFilter.connect(convolver);
         droneFilter.connect(dryGain);
+
+        // Formant path (added to direct)
+        droneFilter.connect(f1);
+        droneFilter.connect(f2);
+
+        f1.connect(formantGain);
+        f2.connect(formantGain);
+
+        formantGain.connect(convolver);
+        formantGain.connect(dryGain);
 
         droneBase.start();
         droneDetune1.start();
@@ -739,7 +865,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         droneHarmonic.start();
 
         // -------------------------
-        // LAYER 5: Binaural (The Soul)
+        // LAYER 5: Binaural
         // -------------------------
         const binauralGain = ctx.createGain();
         binauralGain.gain.value = 0.08;
@@ -762,13 +888,13 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         binauralRight.connect(pannerRight);
         pannerRight.connect(binauralGain);
 
-        binauralGain.connect(masterGain);
+        binauralGain.connect(masterGain); // Direct
 
         binauralLeft.start();
         binauralRight.start();
 
         // -------------------------
-        // LAYER 7: Swell (Breathing)
+        // LAYER 7: Swell
         // -------------------------
         const swellLFO = ctx.createOscillator();
         swellLFO.type = 'sine';
@@ -778,7 +904,6 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         swellGain.gain.value = 0.1;
 
         swellLFO.connect(swellGain);
-        // Modulate volume of surface and wind
         swellGain.connect(surfaceGain.gain);
         swellGain.connect(windGain.gain);
 
@@ -807,16 +932,15 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
             bioFreqBase: 150
         };
 
-        // Scheduler Loop
-        const lookahead = 100; // ms
-        const scheduleAheadTime = 0.2; // s
+        // Scheduler
+        const lookahead = 100;
+        const scheduleAheadTime = 0.2;
         let nextGrainTime = ctx.currentTime;
-        let nextBioTime = ctx.currentTime + 2; // Start bio later
+        let nextBioTime = ctx.currentTime + 2;
 
         const scheduler = () => {
             const currentTime = ctx.currentTime;
 
-            // Fix time drift
             if (nextGrainTime < currentTime) {
                 nextGrainTime = currentTime;
             }
@@ -824,7 +948,6 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
                 nextBioTime = currentTime;
             }
 
-            // Schedule grains
             while (nextGrainTime < currentTime + scheduleAheadTime) {
                 const minInterval = 0.05;
                 const maxInterval = 0.5;
@@ -835,10 +958,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
                 nextGrainTime += interval + randomJitter;
             }
 
-            // Schedule Bio Sounds
             if (nextBioTime < currentTime + scheduleAheadTime) {
-                // Bio density 0.1 (low) to 0.8 (high)
-                // Interval: Low density -> 15-30s, High density -> 5-10s
                 const minBioInterval = 5;
                 const maxBioInterval = 30;
                 const bioInterval = maxBioInterval - (granularParams.bioDensity * (maxBioInterval - minBioInterval));
@@ -851,7 +971,6 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
 
         const granularInterval = setInterval(scheduler, lookahead);
 
-        // Store nodes
         nodesRef.current = {
             subOsc, subGain,
             deepFilter, deepLFO, deepLFOGain,
@@ -859,6 +978,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
             textureFilter, textureGain,
             windFilter, windGain,
             droneBase, droneDetune1, droneDetune2, droneHarmonic,
+            formantGain, // Stored for updates
             binauralLeft, binauralRight,
             swellLFO, swellGain,
             convolver,
@@ -925,7 +1045,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
 
     osc.connect(gain);
-    gain.connect(masterGainRef.current); // Connect directly to master (after compressor ideally, but master is fine for UI)
+    gain.connect(masterGainRef.current);
 
     osc.start();
     osc.stop(ctx.currentTime + 0.5);
