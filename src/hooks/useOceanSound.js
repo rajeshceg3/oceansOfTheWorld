@@ -7,9 +7,9 @@ import { OCEANS } from '../data/oceans';
 // 1. Deep (Rumble/Sub) - Stereo Brown Noise with slow panning
 // 2. Surface (Swell/Waves) - Stereo Pink Noise with phase-offset LFOs
 // 3. Texture (Sparkle/Ice/Bubbles) - High-passed White Noise + Random Envelope / Granular Simulation
-// 4. Drone (Tonal Ambience) - Multi-Oscillator Cluster + Formant Filters (Vowel Tones)
+// 4. Drone (Tonal Ambience) - Multi-Oscillator Cluster + Formant Filters (Vowel Tones) + Sub-Harmonic
 // 5. Binaural (Brainwave Entrainment) - Left/Right Frequency Delta for Alpha/Theta waves
-// 6. Bio (Life) - Procedural Marine Creatures (Whales, Clicks, Chirps, Schools) - Complex FM Synthesis
+// 6. Bio (Life) - Procedural Marine Creatures (Whales, Clicks, Chirps, Schools, Rays, Jellyfish) - Complex FM Synthesis
 // 7. Swell (Movement) - Very slow amplitude modulation (breathing)
 // 8. Saturation (Warmth) - Analog tube simulation via WaveShaping
 
@@ -28,11 +28,11 @@ const AUDIO_PROFILES = {
     windGain: 0.08,
     swellRate: 0.05, // Very slow breath (20s)
     swellDepth: 0.1, // Subtle
-    bioType: 'whale',
+    bioTypes: ['whale', 'jellyfish'],
     bioDensity: 0.15, // Occasional
     bioFreqBase: 150,
     grainDensity: 0.8,
-    grainType: 'bubble',
+    grainTypes: ['bubble', 'droplet'],
     grainFreqBase: 400,
     grainMix: 0.3,
     saturationAmount: 20, // Subtle warmth
@@ -52,11 +52,11 @@ const AUDIO_PROFILES = {
     windGain: 0.15,
     swellRate: 0.1, // Faster (10s)
     swellDepth: 0.15, // More movement
-    bioType: 'click',
+    bioTypes: ['school', 'ray'],
     bioDensity: 0.4, // Active
     bioFreqBase: 2000,
     grainDensity: 0.5,
-    grainType: 'shimmer',
+    grainTypes: ['shimmer', 'droplet'],
     grainFreqBase: 800,
     grainMix: 0.25,
     saturationAmount: 35, // Crisper
@@ -76,11 +76,11 @@ const AUDIO_PROFILES = {
     windGain: 0.1,
     swellRate: 0.08,
     swellDepth: 0.12,
-    bioType: 'school', // New type
+    bioTypes: ['jellyfish', 'school'],
     bioDensity: 0.6,
     bioFreqBase: 600,
     grainDensity: 0.4,
-    grainType: 'droplet',
+    grainTypes: ['droplet', 'sparkle'],
     grainFreqBase: 600,
     grainMix: 0.25,
     saturationAmount: 50, // Rich/Hot
@@ -100,11 +100,11 @@ const AUDIO_PROFILES = {
     windGain: 0.25,
     swellRate: 0.15,
     swellDepth: 0.2, // Stormy
-    bioType: 'whale',
+    bioTypes: ['whale', 'ray'],
     bioDensity: 0.3,
     bioFreqBase: 100,
     grainDensity: 0.3,
-    grainType: 'ice',
+    grainTypes: ['ice', 'shimmer'],
     grainFreqBase: 2000,
     grainMix: 0.4,
     saturationAmount: 15, // Cold/Clean
@@ -124,11 +124,11 @@ const AUDIO_PROFILES = {
     windGain: 0.35,
     swellRate: 0.03, // Glacial pace
     swellDepth: 0.05,
-    bioType: 'ice-crack',
+    bioTypes: ['whale', 'ice-crack', 'school'],
     bioDensity: 0.5,
     bioFreqBase: 300,
     grainDensity: 0.6,
-    grainType: 'ice',
+    grainTypes: ['ice', 'sparkle'],
     grainFreqBase: 3000,
     grainMix: 0.5,
     saturationAmount: 40, // Harsh/Biting
@@ -218,7 +218,12 @@ const createNoiseBuffer = (ctx) => {
 };
 
 const triggerGrain = (ctx, destination, params, time) => {
-    const { type, freqBase, mix } = params;
+    const { grainTypes, freqBase, mix } = params;
+
+    // Pick a random grain type if array is provided
+    const type = (grainTypes && grainTypes.length > 0)
+        ? grainTypes[Math.floor(Math.random() * grainTypes.length)]
+        : params.type || 'bubble';
 
     const panner = ctx.createStereoPanner();
     const pan = Math.random() * 1.5 - 0.75;
@@ -254,6 +259,29 @@ const triggerGrain = (ctx, destination, params, time) => {
              osc.start(time);
              osc.stop(time + duration + 0.1);
         });
+        return;
+    } else if (type === 'sparkle') {
+        // Magical high-frequency cluster (Bell-like)
+        const baseFreq = freqBase * (2 + Math.random()); // Higher pitch
+        const count = 3;
+        for(let i=0; i<count; i++) {
+            const osc = ctx.createOscillator();
+            osc.type = 'sine';
+            // Harmonic series
+            osc.frequency.value = baseFreq * (i + 1) + (Math.random() * 20);
+
+            const gain = ctx.createGain();
+            const dur = 0.1 + Math.random() * 0.1;
+
+            gain.gain.setValueAtTime(0, time);
+            gain.gain.linearRampToValueAtTime(mix * 0.2, time + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.001, time + dur);
+
+            osc.connect(gain);
+            gain.connect(panner);
+            osc.start(time);
+            osc.stop(time + dur + 0.1);
+        }
         return;
     }
 
@@ -298,6 +326,7 @@ const triggerGrain = (ctx, destination, params, time) => {
         gain.gain.linearRampToValueAtTime(mix, time + 0.005);
         gain.gain.exponentialRampToValueAtTime(0.001, time + duration * 0.4);
     } else {
+        // Default / Fallback
         osc.type = 'sine';
         osc.frequency.setValueAtTime(freq * 1.2, time);
         gain.gain.setValueAtTime(0, time);
@@ -314,7 +343,13 @@ const triggerGrain = (ctx, destination, params, time) => {
 };
 
 const triggerBioSound = (ctx, destination, params, time) => {
-    const { bioType, bioFreqBase } = params;
+    const { bioTypes, bioFreqBase } = params;
+
+    // Pick a random bio type if array is provided
+    const bioType = (bioTypes && bioTypes.length > 0)
+        ? bioTypes[Math.floor(Math.random() * bioTypes.length)]
+        : params.bioType || 'whale';
+
     const mix = 0.2;
 
     const panner = ctx.createStereoPanner();
@@ -373,6 +408,78 @@ const triggerBioSound = (ctx, destination, params, time) => {
         carrier.stop(time + duration + 0.5);
         modulator1.stop(time + duration + 0.5);
         modulator2.stop(time + duration + 0.5);
+
+    } else if (bioType === 'jellyfish') {
+        // Resonant "Bloop" / Pulse
+        const duration = 0.5 + Math.random() * 0.3;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
+
+        osc.type = 'sine'; // Can be 'triangle' for more harmonics
+        // Rapid pitch drop
+        const startFreq = bioFreqBase * (1 + Math.random());
+        osc.frequency.setValueAtTime(startFreq, time);
+        osc.frequency.exponentialRampToValueAtTime(startFreq * 0.2, time + duration * 0.3);
+
+        filter.type = 'lowpass';
+        filter.Q.value = 5;
+        filter.frequency.setValueAtTime(startFreq * 1.5, time);
+        filter.frequency.exponentialRampToValueAtTime(startFreq * 0.3, time + duration);
+
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(mix * 1.2, time + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(panner);
+
+        osc.start(time);
+        osc.stop(time + duration + 0.1);
+
+    } else if (bioType === 'ray') {
+        // Majestic Sweep (Doppler-ish Noise + Sub Swell)
+        const duration = 4 + Math.random() * 2;
+
+        // 1. Noise Sweep
+        const noise = ctx.createBufferSource();
+        noise.buffer = createNoiseBuffer(ctx);
+        const nFilter = ctx.createBiquadFilter();
+        const nGain = ctx.createGain();
+
+        nFilter.type = 'bandpass';
+        nFilter.Q.value = 2;
+        nFilter.frequency.setValueAtTime(400, time);
+        // Sweep up then down
+        nFilter.frequency.exponentialRampToValueAtTime(800, time + duration * 0.5);
+        nFilter.frequency.exponentialRampToValueAtTime(200, time + duration);
+
+        nGain.gain.setValueAtTime(0, time);
+        nGain.gain.linearRampToValueAtTime(mix * 0.4, time + duration * 0.4);
+        nGain.gain.linearRampToValueAtTime(0, time + duration);
+
+        noise.connect(nFilter);
+        nFilter.connect(nGain);
+        nGain.connect(panner);
+
+        // 2. Sub Swell
+        const sub = ctx.createOscillator();
+        sub.type = 'sine';
+        const sGain = ctx.createGain();
+        sub.frequency.value = 50 + Math.random() * 20;
+
+        sGain.gain.setValueAtTime(0, time);
+        sGain.gain.linearRampToValueAtTime(mix * 0.5, time + duration * 0.5);
+        sGain.gain.linearRampToValueAtTime(0, time + duration);
+
+        sub.connect(sGain);
+        sGain.connect(panner);
+
+        noise.start(time);
+        noise.stop(time + duration + 0.2);
+        sub.start(time);
+        sub.stop(time + duration + 0.2);
 
     } else if (bioType === 'click') {
         // Organic Clicks (Filtered Noise + Sine)
@@ -525,6 +632,11 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
     nodes.droneDetune2.frequency.setTargetAtTime(profile.droneFreq - (profile.detune/100), now, rampTime);
     nodes.droneHarmonic.frequency.setTargetAtTime(profile.droneFreq * profile.harmonic, now, rampTime);
 
+    // Sub-harmonic drone (New)
+    if (nodes.droneSub) {
+        nodes.droneSub.frequency.setTargetAtTime(profile.droneFreq * 0.5, now, rampTime);
+    }
+
     // --- Formant Filter Mix ---
     if (nodes.formantGain) {
         nodes.formantGain.gain.setTargetAtTime(profile.formantMix, now, rampTime);
@@ -540,20 +652,16 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         nodes.swellGain.gain.setTargetAtTime(profile.swellDepth, now, rampTime);
     }
 
-    // --- Saturation ---
-    // If we want to dynamically update curve we need to recalculate, but simple param updates
-    // usually involve gain or specific node params. WaveShaper curve is expensive to set.
-    // Instead we can just drive into it harder if needed, but here we assume fixed curve per session
-    // or we could swap it. For now, let's just stick to initial config or maybe create a gain before it.
-
     // --- Granular & Bio Engine Params ---
     if (nodes.granularParams) {
         nodes.granularParams.density = profile.grainDensity;
-        nodes.granularParams.type = profile.grainType;
+        nodes.granularParams.grainTypes = profile.grainTypes; // Pass array
+        nodes.granularParams.type = profile.grainType; // Keep fallback
         nodes.granularParams.freqBase = profile.grainFreqBase;
         nodes.granularParams.mix = profile.grainMix;
 
-        nodes.granularParams.bioType = profile.bioType;
+        nodes.granularParams.bioTypes = profile.bioTypes; // Pass array
+        nodes.granularParams.bioType = profile.bioType; // Keep fallback
         nodes.granularParams.bioDensity = profile.bioDensity;
         nodes.granularParams.bioFreqBase = profile.bioFreqBase;
     }
@@ -821,6 +929,20 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         droneHarmonic.type = 'sine';
         droneHarmonic.frequency.value = 110;
 
+        // New Sub-Harmonic Oscillator
+        const droneSub = ctx.createOscillator();
+        droneSub.type = 'square';
+        droneSub.frequency.value = 27.5;
+        const droneSubFilter = ctx.createBiquadFilter();
+        droneSubFilter.type = 'lowpass';
+        droneSubFilter.frequency.value = 100;
+        const droneSubGain = ctx.createGain();
+        droneSubGain.gain.value = 0.1;
+
+        droneSub.connect(droneSubFilter);
+        droneSubFilter.connect(droneSubGain);
+        droneSubGain.connect(droneGain);
+
         droneBase.connect(droneGain);
         droneDetune1.connect(pannerD1);
         pannerD1.connect(droneGain);
@@ -863,6 +985,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         droneDetune1.start();
         droneDetune2.start();
         droneHarmonic.start();
+        droneSub.start();
 
         // -------------------------
         // LAYER 5: Binaural
@@ -924,10 +1047,10 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
 
         const granularParams = {
             density: 0,
-            type: 'bubble',
+            grainTypes: ['bubble'],
             freqBase: 400,
             mix: 0.1,
-            bioType: 'whale',
+            bioTypes: ['whale'],
             bioDensity: 0.1,
             bioFreqBase: 150
         };
@@ -977,7 +1100,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
             surfaceFilter, surfaceLFO, surfaceLFOGain,
             textureFilter, textureGain,
             windFilter, windGain,
-            droneBase, droneDetune1, droneDetune2, droneHarmonic,
+            droneBase, droneDetune1, droneDetune2, droneHarmonic, droneSub,
             formantGain, // Stored for updates
             binauralLeft, binauralRight,
             swellLFO, swellGain,
