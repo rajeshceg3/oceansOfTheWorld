@@ -28,7 +28,7 @@ const AUDIO_PROFILES = {
     windGain: 0.08,
     swellRate: 0.05, // Very slow breath (20s)
     swellDepth: 0.1, // Subtle
-    bioTypes: ['whale', 'jellyfish'],
+    bioTypes: ['whale', 'jellyfish', 'dolphin'], // Added dolphin
     bioDensity: 0.15, // Occasional
     bioFreqBase: 150,
     grainDensity: 0.8,
@@ -56,7 +56,7 @@ const AUDIO_PROFILES = {
     bioDensity: 0.4, // Active
     bioFreqBase: 2000,
     grainDensity: 0.5,
-    grainTypes: ['shimmer', 'droplet'],
+    grainTypes: ['shimmer', 'droplet', 'sand'], // Added sand
     grainFreqBase: 800,
     grainMix: 0.25,
     saturationAmount: 35, // Crisper
@@ -76,7 +76,7 @@ const AUDIO_PROFILES = {
     windGain: 0.1,
     swellRate: 0.08,
     swellDepth: 0.12,
-    bioTypes: ['jellyfish', 'school'],
+    bioTypes: ['jellyfish', 'school', 'dolphin'], // Added dolphin
     bioDensity: 0.6,
     bioFreqBase: 600,
     grainDensity: 0.4,
@@ -104,7 +104,7 @@ const AUDIO_PROFILES = {
     bioDensity: 0.3,
     bioFreqBase: 100,
     grainDensity: 0.3,
-    grainTypes: ['ice', 'shimmer'],
+    grainTypes: ['ice', 'shimmer', 'foam'], // Added foam
     grainFreqBase: 2000,
     grainMix: 0.4,
     saturationAmount: 15, // Cold/Clean
@@ -175,17 +175,27 @@ const createImpulseResponse = (ctx, duration, decay) => {
   const left = impulse.getChannelData(0);
   const right = impulse.getChannelData(1);
 
+  const preDelaySamples = Math.floor(rate * 0.05); // 50ms pre-delay
+
   for (let i = 0; i < length; i++) {
-    const n = i / length;
+    if (i < preDelaySamples) {
+        left[i] = 0;
+        right[i] = 0;
+        continue;
+    }
+
+    // Offset index for decay calculation
+    const n = (i - preDelaySamples) / (length - preDelaySamples);
     const amp = Math.pow(1 - n, decay);
+
     // Decorrelate channels for wider stereo
     left[i] = (Math.random() * 2 - 1) * amp;
     right[i] = (Math.random() * 2 - 1) * amp * 0.8;
 
-    // Early reflections
-    if (i > 1000 && i < 8000) {
-        left[i] += (Math.random() * 2 - 1) * 0.4 * amp;
-        right[i] += (Math.random() * 2 - 1) * 0.4 * amp;
+    // Early reflections (simulated)
+    if (i > preDelaySamples + 1000 && i < preDelaySamples + 8000) {
+        left[i] += (Math.random() * 2 - 1) * 0.5 * amp; // Increased reflection presence
+        right[i] += (Math.random() * 2 - 1) * 0.5 * amp;
     }
   }
   return impulse;
@@ -325,6 +335,45 @@ const triggerGrain = (ctx, destination, params, time) => {
         gain.gain.setValueAtTime(0, time);
         gain.gain.linearRampToValueAtTime(mix, time + 0.005);
         gain.gain.exponentialRampToValueAtTime(0.001, time + duration * 0.4);
+    } else if (type === 'sand') {
+        // High-Pass Filtered Noise (Friction)
+        const noise = ctx.createBufferSource();
+        noise.buffer = createNoiseBuffer(ctx);
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.value = 5000 + Math.random() * 2000;
+
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(mix * 0.4, time + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration * 0.3);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(panner);
+        noise.start(time);
+        noise.stop(time + duration + 0.1);
+        return;
+    } else if (type === 'foam') {
+        // Soft White Noise (Aeration)
+        const noise = ctx.createBufferSource();
+        noise.buffer = createNoiseBuffer(ctx); // Using existing pink-ish noise buffer is fine
+
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 800 + Math.random() * 400;
+
+        const dur = duration * 2.5; // Longer duration
+
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(mix * 0.3, time + dur * 0.2);
+        gain.gain.linearRampToValueAtTime(0, time + dur);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(panner);
+        noise.start(time);
+        noise.stop(time + dur + 0.1);
+        return;
     } else {
         // Default / Fallback
         osc.type = 'sine';
@@ -334,7 +383,7 @@ const triggerGrain = (ctx, destination, params, time) => {
         gain.gain.linearRampToValueAtTime(0, time + duration);
     }
 
-    if (type !== 'ice') {
+    if (type !== 'sand' && type !== 'foam' && type !== 'ice') {
         osc.connect(gain);
         gain.connect(panner);
         osc.start(time);
@@ -364,14 +413,18 @@ const triggerBioSound = (ctx, destination, params, time) => {
         const carrier = ctx.createOscillator();
         const modulator1 = ctx.createOscillator();
         const modulator2 = ctx.createOscillator();
+        // Richer sub-harmonics
+        const modulator3 = ctx.createOscillator();
 
         const modGain1 = ctx.createGain();
         const modGain2 = ctx.createGain();
+        const modGain3 = ctx.createGain();
         const mainGain = ctx.createGain();
 
         carrier.type = 'triangle';
         modulator1.type = 'sine';
         modulator2.type = 'sine';
+        modulator3.type = 'sawtooth';
 
         // Carrier Sweep
         carrier.frequency.setValueAtTime(bioFreqBase, time);
@@ -387,11 +440,19 @@ const triggerBioSound = (ctx, destination, params, time) => {
         modGain2.gain.setValueAtTime(10, time);
         modGain2.gain.linearRampToValueAtTime(0, time + duration * 0.5);
 
+        // Modulator 3 (Deep Texture - New)
+        modulator3.frequency.value = 15; // Low rattle
+        modGain3.gain.setValueAtTime(5, time);
+        modGain3.gain.exponentialRampToValueAtTime(0.1, time + duration);
+
         modulator1.connect(modGain1);
         modGain1.connect(carrier.frequency);
 
         modulator2.connect(modGain2);
         modGain2.connect(carrier.frequency);
+
+        modulator3.connect(modGain3);
+        modGain3.connect(carrier.frequency);
 
         // Main Envelope (ADSR-ish)
         mainGain.gain.setValueAtTime(0, time);
@@ -405,9 +466,35 @@ const triggerBioSound = (ctx, destination, params, time) => {
         carrier.start(time);
         modulator1.start(time);
         modulator2.start(time);
+        modulator3.start(time);
+
         carrier.stop(time + duration + 0.5);
         modulator1.stop(time + duration + 0.5);
         modulator2.stop(time + duration + 0.5);
+        modulator3.stop(time + duration + 0.5);
+
+    } else if (bioType === 'dolphin') {
+        // High-Frequency Clicks & Whistles
+        const duration = 0.4 + Math.random() * 0.4;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = 'sine';
+        const startFreq = bioFreqBase * (3 + Math.random() * 2); // Much higher
+
+        osc.frequency.setValueAtTime(startFreq, time);
+        // Playful swoop
+        osc.frequency.linearRampToValueAtTime(startFreq * 2, time + duration * 0.4);
+        osc.frequency.linearRampToValueAtTime(startFreq * 0.5, time + duration);
+
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(mix * 0.7, time + duration * 0.1);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+        osc.connect(gain);
+        gain.connect(panner);
+        osc.start(time);
+        osc.stop(time + duration + 0.1);
 
     } else if (bioType === 'jellyfish') {
         // Resonant "Bloop" / Pulse
@@ -1017,6 +1104,30 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         binauralRight.start();
 
         // -------------------------
+        // LAYER 6: Ethereal Shimmer (New)
+        // -------------------------
+        const shimmerOsc = ctx.createOscillator();
+        shimmerOsc.type = 'sine';
+        shimmerOsc.frequency.value = 8000;
+
+        const shimmerGain = ctx.createGain();
+        shimmerGain.gain.value = 0; // Start silent
+
+        const shimmerLFO = ctx.createOscillator();
+        shimmerLFO.frequency.value = 0.05;
+        const shimmerLFOGain = ctx.createGain();
+        shimmerLFOGain.gain.value = 0.02; // Very subtle
+
+        shimmerLFO.connect(shimmerLFOGain);
+        shimmerLFOGain.connect(shimmerGain.gain);
+
+        shimmerOsc.connect(shimmerGain);
+        shimmerGain.connect(dryGain);
+
+        shimmerOsc.start();
+        shimmerLFO.start();
+
+        // -------------------------
         // LAYER 7: Swell
         // -------------------------
         const swellLFO = ctx.createOscillator();
@@ -1071,6 +1182,15 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
                 nextBioTime = currentTime;
             }
 
+            // Dynamic Mix Evolution
+            // Slowly drift texture gain to breathe
+            if (nodesRef.current && nodesRef.current.textureGain) {
+                const drift = (Math.sin(currentTime * 0.1) * 0.5 + 0.5) * 0.05;
+                const base = AUDIO_PROFILES[OCEANS[currentOceanIndex]?.id || 'pacific'].textureMix * 0.3;
+                nodesRef.current.textureGain.gain.setTargetAtTime(base + drift, currentTime, 1);
+            }
+
+
             while (nextGrainTime < currentTime + scheduleAheadTime) {
                 const minInterval = 0.05;
                 const maxInterval = 0.5;
@@ -1104,6 +1224,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
             formantGain, // Stored for updates
             binauralLeft, binauralRight,
             swellLFO, swellGain,
+            shimmerOsc, shimmerGain, shimmerLFO, // New Layer
             convolver,
             granularInterval, granularParams
         };
