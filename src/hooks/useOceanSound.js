@@ -36,7 +36,10 @@ const AUDIO_PROFILES = {
     grainFreqBase: 400,
     grainMix: 0.3,
     saturationAmount: 20, // Subtle warmth
-    formantMix: 0.2 // Mild vowel character
+    formantMix: 0.2, // Mild vowel character
+    shimmerFreq: 4000,
+    shimmerMix: 0.05,
+    breathMix: 0.1
   },
   atlantic: {
     baseFreq: 80,
@@ -60,7 +63,10 @@ const AUDIO_PROFILES = {
     grainFreqBase: 800,
     grainMix: 0.25,
     saturationAmount: 35, // Crisper
-    formantMix: 0.1
+    formantMix: 0.1,
+    shimmerFreq: 5000,
+    shimmerMix: 0.08,
+    breathMix: 0.1
   },
   indian: {
     baseFreq: 70,
@@ -84,7 +90,10 @@ const AUDIO_PROFILES = {
     grainFreqBase: 600,
     grainMix: 0.25,
     saturationAmount: 50, // Rich/Hot
-    formantMix: 0.4 // Strong vowel resonance (Om-like)
+    formantMix: 0.4, // Strong vowel resonance (Om-like)
+    shimmerFreq: 3000,
+    shimmerMix: 0.06,
+    breathMix: 0.1
   },
   southern: {
     baseFreq: 90,
@@ -108,7 +117,10 @@ const AUDIO_PROFILES = {
     grainFreqBase: 2000,
     grainMix: 0.4,
     saturationAmount: 15, // Cold/Clean
-    formantMix: 0.15
+    formantMix: 0.15,
+    shimmerFreq: 6000,
+    shimmerMix: 0.1,
+    breathMix: 0.1
   },
   arctic: {
     baseFreq: 100,
@@ -132,7 +144,10 @@ const AUDIO_PROFILES = {
     grainFreqBase: 3000,
     grainMix: 0.5,
     saturationAmount: 40, // Harsh/Biting
-    formantMix: 0.05
+    formantMix: 0.05,
+    shimmerFreq: 7000,
+    shimmerMix: 0.15,
+    breathMix: 0.1
   }
 };
 
@@ -177,15 +192,17 @@ const createImpulseResponse = (ctx, duration, decay) => {
 
   for (let i = 0; i < length; i++) {
     const n = i / length;
-    const amp = Math.pow(1 - n, decay);
-    // Decorrelate channels for wider stereo
-    left[i] = (Math.random() * 2 - 1) * amp;
-    right[i] = (Math.random() * 2 - 1) * amp * 0.8;
+    // Smoother tail curve for richer decay
+    const amp = Math.pow(1 - n, decay * 0.8);
 
-    // Early reflections
-    if (i > 1000 && i < 8000) {
-        left[i] += (Math.random() * 2 - 1) * 0.4 * amp;
-        right[i] += (Math.random() * 2 - 1) * 0.4 * amp;
+    // Increased decorrelation and density
+    left[i] = (Math.random() * 2 - 1) * amp;
+    right[i] = (Math.random() * 2 - 1) * amp * 0.9;
+
+    // Enhanced Early reflections
+    if (i > 500 && i < 10000) {
+        left[i] += (Math.random() * 2 - 1) * 0.5 * amp;
+        right[i] += (Math.random() * 2 - 1) * 0.5 * amp;
     }
   }
   return impulse;
@@ -360,6 +377,28 @@ const triggerBioSound = (ctx, destination, params, time) => {
     if (bioType === 'whale') {
         // High-Fidelity FM Whale Call (Dual Modulator)
         const duration = 3 + Math.random() * 4;
+        const breathMix = params.breathMix || 0.1;
+
+        // Breath/Water Noise (Procedural Texture)
+        if (Math.random() > 0.3) {
+             const breath = ctx.createBufferSource();
+             breath.buffer = createNoiseBuffer(ctx);
+             const bFilter = ctx.createBiquadFilter();
+             bFilter.type = 'bandpass';
+             bFilter.frequency.value = 800 + Math.random() * 400;
+             bFilter.Q.value = 1;
+             const bGain = ctx.createGain();
+
+             bGain.gain.setValueAtTime(0, time);
+             bGain.gain.linearRampToValueAtTime(breathMix, time + 0.1);
+             bGain.gain.exponentialRampToValueAtTime(0.001, time + 1.5);
+
+             breath.connect(bFilter);
+             bFilter.connect(bGain);
+             bGain.connect(panner);
+             breath.start(time);
+             breath.stop(time + 2);
+        }
 
         const carrier = ctx.createOscillator();
         const modulator1 = ctx.createOscillator();
@@ -450,10 +489,10 @@ const triggerBioSound = (ctx, destination, params, time) => {
 
         nFilter.type = 'bandpass';
         nFilter.Q.value = 2;
-        nFilter.frequency.setValueAtTime(400, time);
-        // Sweep up then down
-        nFilter.frequency.exponentialRampToValueAtTime(800, time + duration * 0.5);
-        nFilter.frequency.exponentialRampToValueAtTime(200, time + duration);
+        nFilter.frequency.setValueAtTime(300, time);
+        // Sweep up then down (Widened range for drama)
+        nFilter.frequency.exponentialRampToValueAtTime(1000, time + duration * 0.5);
+        nFilter.frequency.exponentialRampToValueAtTime(100, time + duration);
 
         nGain.gain.setValueAtTime(0, time);
         nGain.gain.linearRampToValueAtTime(mix * 0.4, time + duration * 0.4);
@@ -646,6 +685,17 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
     nodes.binauralLeft.frequency.setTargetAtTime(profile.droneFreq, now, rampTime);
     nodes.binauralRight.frequency.setTargetAtTime(profile.droneFreq + profile.binauralDelta, now, rampTime);
 
+    // --- Ethereal Shimmer Layer ---
+    if (nodes.shimmerGain) {
+        // Subtle fade in/out
+        nodes.shimmerGain.gain.setTargetAtTime(profile.shimmerMix || 0, now, rampTime);
+    }
+    if (nodes.shimmerOsc1 && nodes.shimmerOsc2) {
+        const freq = profile.shimmerFreq || 4000;
+        nodes.shimmerOsc1.frequency.setTargetAtTime(freq, now, rampTime);
+        nodes.shimmerOsc2.frequency.setTargetAtTime(freq + 50, now, rampTime);
+    }
+
     // --- Swell (Breathing) ---
     if (nodes.swellLFO && nodes.swellGain) {
         nodes.swellLFO.frequency.setTargetAtTime(profile.swellRate, now, rampTime);
@@ -664,6 +714,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         nodes.granularParams.bioType = profile.bioType; // Keep fallback
         nodes.granularParams.bioDensity = profile.bioDensity;
         nodes.granularParams.bioFreqBase = profile.bioFreqBase;
+        nodes.granularParams.breathMix = profile.breathMix;
     }
 
   }, []);
@@ -1017,6 +1068,70 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         binauralRight.start();
 
         // -------------------------
+        // LAYER 9: Ethereal Shimmer (Ultrathink Addition)
+        // -------------------------
+        const shimmerGain = ctx.createGain();
+        shimmerGain.gain.value = 0; // Controlled via updateAudioParams
+        shimmerGain.connect(convolver);
+        shimmerGain.connect(dryGain);
+
+        // Voice 1 (Left - Triangle)
+        const shimmerOsc1 = ctx.createOscillator();
+        shimmerOsc1.type = 'triangle';
+        shimmerOsc1.frequency.value = 4000;
+        const shimmerLFO1 = ctx.createOscillator();
+        shimmerLFO1.frequency.value = 6; // Fast flutter
+        const shimmerAM1 = ctx.createGain();
+        shimmerAM1.gain.value = 0.5; // AM depth base
+
+        const shimmerPan1 = ctx.createStereoPanner();
+        shimmerPan1.pan.value = -0.8;
+
+        // AM Synthesis Logic: LFO modulates Gain
+        // We need to offset the gain so it doesn't go negative or clip awkwardly,
+        // although AudioParam values can be anything. For AM: Gain = 0.5 + 0.5 * sin(t)
+        // But here we can just let LFO modulate gain node which defaults to 1?
+        // Actually, let's just connect LFO to gain.gain.
+        // If gain.gain.value is 0.5, LFO +/- 1 will make it -0.5 to 1.5.
+        // Better: gain.gain.value = 0.5. LFO connects to gain.gain.
+        // We want amplitude 0 to 1.
+
+        const amDepth1 = ctx.createGain();
+        amDepth1.gain.value = 0.5;
+        shimmerLFO1.connect(amDepth1);
+        amDepth1.connect(shimmerAM1.gain);
+
+        shimmerOsc1.connect(shimmerAM1);
+        shimmerAM1.connect(shimmerPan1);
+        shimmerPan1.connect(shimmerGain);
+
+        // Voice 2 (Right - Sine)
+        const shimmerOsc2 = ctx.createOscillator();
+        shimmerOsc2.type = 'sine';
+        shimmerOsc2.frequency.value = 4050;
+        const shimmerLFO2 = ctx.createOscillator();
+        shimmerLFO2.frequency.value = 4.5;
+        const shimmerAM2 = ctx.createGain();
+        shimmerAM2.gain.value = 0.5;
+
+        const shimmerPan2 = ctx.createStereoPanner();
+        shimmerPan2.pan.value = 0.8;
+
+        const amDepth2 = ctx.createGain();
+        amDepth2.gain.value = 0.5;
+        shimmerLFO2.connect(amDepth2);
+        amDepth2.connect(shimmerAM2.gain);
+
+        shimmerOsc2.connect(shimmerAM2);
+        shimmerAM2.connect(shimmerPan2);
+        shimmerPan2.connect(shimmerGain);
+
+        shimmerOsc1.start();
+        shimmerLFO1.start();
+        shimmerOsc2.start();
+        shimmerLFO2.start();
+
+        // -------------------------
         // LAYER 7: Swell
         // -------------------------
         const swellLFO = ctx.createOscillator();
@@ -1103,6 +1218,9 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
             droneBase, droneDetune1, droneDetune2, droneHarmonic, droneSub,
             formantGain, // Stored for updates
             binauralLeft, binauralRight,
+            // New Shimmer Layer
+            shimmerGain, shimmerOsc1, shimmerOsc2,
+            shimmerLFO1, shimmerLFO2, shimmerAM1, shimmerAM2,
             swellLFO, swellGain,
             convolver,
             granularInterval, granularParams
