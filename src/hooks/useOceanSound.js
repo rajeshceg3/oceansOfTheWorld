@@ -253,7 +253,7 @@ const triggerGrain = (ctx, destination, params, time) => {
         // High-Fidelity Shimmer: 5-voice detuned cluster
         const baseFreq = freqBase * (1 + Math.random() * 0.5);
         // Pentatonic-ish spread or just cluster
-        const detunes = [-0.02, -0.01, 0, 0.01, 0.02];
+        const detunes = [-0.03, -0.015, 0, 0.015, 0.03];
 
         detunes.forEach((detune, i) => {
              const osc = ctx.createOscillator();
@@ -380,7 +380,7 @@ const triggerBioSound = (ctx, destination, params, time) => {
         const breathMix = params.breathMix || 0.1;
 
         // Breath/Water Noise (Procedural Texture)
-        if (Math.random() > 0.3) {
+        if (Math.random() > 0.2) {
              const breath = ctx.createBufferSource();
              breath.buffer = createNoiseBuffer(ctx);
              const bFilter = ctx.createBiquadFilter();
@@ -596,7 +596,7 @@ const triggerBioSound = (ctx, destination, params, time) => {
 
     } else if (bioType === 'school') {
         // Granular Swarm
-        const count = 15;
+        const count = 25;
         const swarmDuration = 2;
 
         for(let i=0; i<count; i++) {
@@ -700,6 +700,16 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
     if (nodes.swellLFO && nodes.swellGain) {
         nodes.swellLFO.frequency.setTargetAtTime(profile.swellRate, now, rampTime);
         nodes.swellGain.gain.setTargetAtTime(profile.swellDepth, now, rampTime);
+    }
+
+    // --- Saturation (Warmth) ---
+    if (nodes.saturator) {
+        nodes.saturator.curve = createSaturationCurve(profile.saturationAmount);
+    }
+
+    // --- Reverb (Space) ---
+    if (nodes.convolver) {
+        nodes.convolver.buffer = createImpulseResponse(ctx, profile.verbDecay || 4, 3);
     }
 
     // --- Granular & Bio Engine Params ---
@@ -1222,6 +1232,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
             shimmerGain, shimmerOsc1, shimmerOsc2,
             shimmerLFO1, shimmerLFO2, shimmerAM1, shimmerAM2,
             swellLFO, swellGain,
+            saturator,
             convolver,
             granularInterval, granularParams
         };
