@@ -12,6 +12,15 @@ import { OCEANS } from '../data/oceans';
 // 6. Bio (Life) - Procedural Marine Creatures (Whales, Clicks, Chirps, Schools, Rays, Jellyfish) - Complex FM Synthesis
 // 7. Swell (Movement) - Very slow amplitude modulation (breathing)
 // 8. Saturation (Warmth) - Analog tube simulation via WaveShaping
+// 9. Melody (Thought) - Generative musical phrases based on ocean mood (Pentatonic/Modal scales)
+
+const SCALES = {
+  pacific: [261.63, 293.66, 329.63, 392.00, 440.00, 523.25], // C Major Pentatonic (Calm, Bright)
+  atlantic: [293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25], // D Dorian (Mysterious, flowing)
+  indian: [349.23, 392.00, 440.00, 493.88, 523.25, 587.33, 659.25], // F Lydian (Dreamy, floating)
+  southern: [440.00, 493.88, 523.25, 587.33, 659.25, 698.46, 783.99], // A Aeolian (Sad, cold)
+  arctic: [329.63, 349.23, 392.00, 440.00, 493.88, 523.25, 587.33], // E Phrygian (Dark, tense)
+};
 
 const AUDIO_PROFILES = {
   pacific: {
@@ -28,7 +37,7 @@ const AUDIO_PROFILES = {
     windGain: 0.08,
     swellRate: 0.05, // Very slow breath (20s)
     swellDepth: 0.1, // Subtle
-    bioTypes: ['whale', 'jellyfish'],
+    bioTypes: ['whale', 'jellyfish', 'dolphin'],
     bioDensity: 0.15, // Occasional
     bioFreqBase: 150,
     grainDensity: 0.8,
@@ -39,7 +48,10 @@ const AUDIO_PROFILES = {
     formantMix: 0.2, // Mild vowel character
     shimmerFreq: 4000,
     shimmerMix: 0.05,
-    breathMix: 0.1
+    breathMix: 0.1,
+    melodyScale: 'pacific',
+    melodyRate: 0.2, // Sparse
+    melodyMix: 0.15
   },
   atlantic: {
     baseFreq: 80,
@@ -55,7 +67,7 @@ const AUDIO_PROFILES = {
     windGain: 0.15,
     swellRate: 0.1, // Faster (10s)
     swellDepth: 0.15, // More movement
-    bioTypes: ['school', 'ray'],
+    bioTypes: ['school', 'ray', 'dolphin'],
     bioDensity: 0.4, // Active
     bioFreqBase: 2000,
     grainDensity: 0.5,
@@ -66,7 +78,10 @@ const AUDIO_PROFILES = {
     formantMix: 0.1,
     shimmerFreq: 5000,
     shimmerMix: 0.08,
-    breathMix: 0.1
+    breathMix: 0.1,
+    melodyScale: 'atlantic',
+    melodyRate: 0.3,
+    melodyMix: 0.2
   },
   indian: {
     baseFreq: 70,
@@ -82,7 +97,7 @@ const AUDIO_PROFILES = {
     windGain: 0.1,
     swellRate: 0.08,
     swellDepth: 0.12,
-    bioTypes: ['jellyfish', 'school'],
+    bioTypes: ['jellyfish', 'school', 'growl'],
     bioDensity: 0.6,
     bioFreqBase: 600,
     grainDensity: 0.4,
@@ -93,7 +108,10 @@ const AUDIO_PROFILES = {
     formantMix: 0.4, // Strong vowel resonance (Om-like)
     shimmerFreq: 3000,
     shimmerMix: 0.06,
-    breathMix: 0.1
+    breathMix: 0.1,
+    melodyScale: 'indian',
+    melodyRate: 0.25,
+    melodyMix: 0.25
   },
   southern: {
     baseFreq: 90,
@@ -109,7 +127,7 @@ const AUDIO_PROFILES = {
     windGain: 0.25,
     swellRate: 0.15,
     swellDepth: 0.2, // Stormy
-    bioTypes: ['whale', 'ray'],
+    bioTypes: ['whale', 'ray', 'growl'],
     bioDensity: 0.3,
     bioFreqBase: 100,
     grainDensity: 0.3,
@@ -120,7 +138,10 @@ const AUDIO_PROFILES = {
     formantMix: 0.15,
     shimmerFreq: 6000,
     shimmerMix: 0.1,
-    breathMix: 0.1
+    breathMix: 0.1,
+    melodyScale: 'southern',
+    melodyRate: 0.15,
+    melodyMix: 0.1
   },
   arctic: {
     baseFreq: 100,
@@ -147,7 +168,10 @@ const AUDIO_PROFILES = {
     formantMix: 0.05,
     shimmerFreq: 7000,
     shimmerMix: 0.15,
-    breathMix: 0.1
+    breathMix: 0.1,
+    melodyScale: 'arctic',
+    melodyRate: 0.1, // Sparse
+    melodyMix: 0.2
   }
 };
 
@@ -359,6 +383,53 @@ const triggerGrain = (ctx, destination, params, time) => {
     }
 };
 
+const triggerMelody = (ctx, destination, params, time) => {
+    const { melodyScale, melodyMix } = params;
+    if (!melodyScale || !SCALES[melodyScale]) return;
+
+    const scale = SCALES[melodyScale];
+    // Simple generative logic: Pick random note
+    const freq = scale[Math.floor(Math.random() * scale.length)];
+    // Occasional octave jump for variety
+    const octave = Math.random() > 0.8 ? 2 : (Math.random() > 0.2 ? 1 : 0.5);
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const panner = ctx.createStereoPanner();
+
+    // Soft tones
+    osc.type = Math.random() > 0.6 ? 'sine' : 'triangle';
+    osc.frequency.setValueAtTime(freq * octave, time);
+
+    // Add subtle vibrato
+    const vibrato = ctx.createOscillator();
+    vibrato.frequency.value = 3 + Math.random() * 3;
+    const vibratoGain = ctx.createGain();
+    vibratoGain.gain.value = 2; // +/- 2Hz
+    vibrato.connect(vibratoGain);
+    vibratoGain.connect(osc.frequency);
+    vibrato.start(time);
+    vibrato.stop(time + 5);
+
+    // Slow, dreamy ADSR Envelope
+    const attack = 0.5 + Math.random() * 1.0;
+    const release = 2.0 + Math.random() * 2.0;
+    const totalDur = attack + release;
+
+    gain.gain.setValueAtTime(0, time);
+    gain.gain.linearRampToValueAtTime(melodyMix || 0.1, time + attack);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + totalDur);
+
+    panner.pan.value = Math.random() * 1.5 - 0.75;
+
+    osc.connect(gain);
+    gain.connect(panner);
+    panner.connect(destination);
+
+    osc.start(time);
+    osc.stop(time + totalDur + 0.1);
+};
+
 const triggerBioSound = (ctx, destination, params, time) => {
     const { bioTypes, bioFreqBase } = params;
 
@@ -367,7 +438,7 @@ const triggerBioSound = (ctx, destination, params, time) => {
         ? bioTypes[Math.floor(Math.random() * bioTypes.length)]
         : params.bioType || 'whale';
 
-    const mix = 0.2;
+    const mix = 0.25; // Slightly boosted
 
     const panner = ctx.createStereoPanner();
     const pan = Math.random() * 1.8 - 0.9;
@@ -447,6 +518,89 @@ const triggerBioSound = (ctx, destination, params, time) => {
         carrier.stop(time + duration + 0.5);
         modulator1.stop(time + duration + 0.5);
         modulator2.stop(time + duration + 0.5);
+
+    } else if (bioType === 'dolphin') {
+        // Clicks + Whistles
+        const isClick = Math.random() > 0.5;
+
+        if (isClick) {
+            // Echolocation clicks
+            const count = 5 + Math.floor(Math.random() * 10);
+            for(let i=0; i<count; i++) {
+                const t = time + i * (0.01 + Math.random() * 0.02);
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(2000 + Math.random() * 5000, t);
+                osc.frequency.exponentialRampToValueAtTime(100, t + 0.005);
+                gain.gain.setValueAtTime(0, t);
+                gain.gain.linearRampToValueAtTime(mix, t + 0.001);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + 0.005);
+                osc.connect(gain);
+                gain.connect(panner);
+                osc.start(t);
+                osc.stop(t + 0.01);
+            }
+        } else {
+            // Whistle sweep
+            const dur = 0.5 + Math.random() * 0.5;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            const startFreq = 4000 + Math.random() * 2000;
+            const endFreq = startFreq + (Math.random() * 2000 - 1000);
+
+            osc.frequency.setValueAtTime(startFreq, time);
+            osc.frequency.exponentialRampToValueAtTime(endFreq, time + dur);
+
+            gain.gain.setValueAtTime(0, time);
+            gain.gain.linearRampToValueAtTime(mix, time + 0.1);
+            gain.gain.linearRampToValueAtTime(0, time + dur);
+
+            osc.connect(gain);
+            gain.connect(panner);
+            osc.start(time);
+            osc.stop(time + dur + 0.1);
+        }
+
+    } else if (bioType === 'growl') {
+        // Deep Monster Growl (FM)
+        const dur = 2 + Math.random() * 2;
+        const osc = ctx.createOscillator();
+        const mod = ctx.createOscillator();
+        const modGain = ctx.createGain();
+        const gain = ctx.createGain();
+
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(50 + Math.random() * 30, time);
+        osc.frequency.linearRampToValueAtTime(30, time + dur);
+
+        mod.type = 'sine';
+        mod.frequency.value = 15 + Math.random() * 10;
+
+        modGain.gain.setValueAtTime(100, time);
+        modGain.gain.linearRampToValueAtTime(0, time + dur);
+
+        mod.connect(modGain);
+        modGain.connect(osc.frequency);
+
+        // Lowpass filter to muffle it
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 400;
+
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(mix * 0.8, time + dur * 0.3);
+        gain.gain.linearRampToValueAtTime(0, time + dur);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(panner);
+
+        osc.start(time);
+        mod.start(time);
+        osc.stop(time + dur + 0.1);
+        mod.stop(time + dur + 0.1);
 
     } else if (bioType === 'jellyfish') {
         // Resonant "Bloop" / Pulse
@@ -725,6 +879,10 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         nodes.granularParams.bioDensity = profile.bioDensity;
         nodes.granularParams.bioFreqBase = profile.bioFreqBase;
         nodes.granularParams.breathMix = profile.breathMix;
+
+        nodes.granularParams.melodyScale = profile.melodyScale;
+        nodes.granularParams.melodyRate = profile.melodyRate;
+        nodes.granularParams.melodyMix = profile.melodyMix;
     }
 
   }, []);
@@ -777,6 +935,16 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         const subOsc = ctx.createOscillator();
         subOsc.type = 'sine';
         subOsc.frequency.value = 40;
+
+        // Add subtle LFO for organic pulse
+        const subLFO = ctx.createOscillator();
+        subLFO.frequency.value = 0.05; // 20s cycle
+        const subLFOGain = ctx.createGain();
+        subLFOGain.gain.value = 2; // +/- 2Hz
+        subLFO.connect(subLFOGain);
+        subLFOGain.connect(subOsc.frequency);
+        subLFO.start();
+
         const subGain = ctx.createGain();
         subGain.gain.value = 0.25;
         subOsc.connect(subGain);
@@ -1158,7 +1326,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         swellLFO.start();
 
         // -------------------------
-        // Granular & Bio Engine
+        // Granular, Bio & Melody Engine
         // -------------------------
         const granularGain = ctx.createGain();
         granularGain.gain.value = 1;
@@ -1170,6 +1338,11 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         bioGain.connect(convolver);
         bioGain.connect(dryGain);
 
+        const melodyGain = ctx.createGain();
+        melodyGain.gain.value = 1;
+        melodyGain.connect(convolver);
+        melodyGain.connect(dryGain);
+
         const granularParams = {
             density: 0,
             grainTypes: ['bubble'],
@@ -1177,7 +1350,10 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
             mix: 0.1,
             bioTypes: ['whale'],
             bioDensity: 0.1,
-            bioFreqBase: 150
+            bioFreqBase: 150,
+            melodyScale: 'pacific',
+            melodyRate: 0.2,
+            melodyMix: 0.1
         };
 
         // Scheduler
@@ -1185,16 +1361,14 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         const scheduleAheadTime = 0.2;
         let nextGrainTime = ctx.currentTime;
         let nextBioTime = ctx.currentTime + 2;
+        let nextMelodyTime = ctx.currentTime + 1;
 
         const scheduler = () => {
             const currentTime = ctx.currentTime;
 
-            if (nextGrainTime < currentTime) {
-                nextGrainTime = currentTime;
-            }
-            if (nextBioTime < currentTime) {
-                nextBioTime = currentTime;
-            }
+            if (nextGrainTime < currentTime) nextGrainTime = currentTime;
+            if (nextBioTime < currentTime) nextBioTime = currentTime;
+            if (nextMelodyTime < currentTime) nextMelodyTime = currentTime;
 
             while (nextGrainTime < currentTime + scheduleAheadTime) {
                 const minInterval = 0.05;
@@ -1215,12 +1389,24 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
                 triggerBioSound(ctx, bioGain, granularParams, nextBioTime);
                 nextBioTime += bioInterval + jitter;
             }
+
+            if (nextMelodyTime < currentTime + scheduleAheadTime) {
+                // Stochastic rhythm
+                // Rate 0.1 = sparse (10s avg), 1.0 = active (1s avg)
+                const rate = Math.max(0.05, Math.min(2.0, granularParams.melodyRate || 0.1));
+                const baseInterval = 1 / rate;
+                const interval = baseInterval * (0.5 + Math.random()); // Random variation
+
+                triggerMelody(ctx, melodyGain, granularParams, nextMelodyTime);
+                nextMelodyTime += interval;
+            }
         };
 
         const granularInterval = setInterval(scheduler, lookahead);
 
         nodesRef.current = {
-            subOsc, subGain,
+            subOsc, subGain, subLFO, subLFOGain,
+            melodyGain,
             deepFilter, deepLFO, deepLFOGain,
             surfaceFilter, surfaceLFO, surfaceLFOGain,
             textureFilter, textureGain,
