@@ -37,11 +37,11 @@ const AUDIO_PROFILES = {
     windGain: 0.08,
     swellRate: 0.05, // Very slow breath (20s)
     swellDepth: 0.1, // Subtle
-    bioTypes: ['whale', 'jellyfish', 'dolphin'],
+    bioTypes: ['whale', 'jellyfish', 'dolphin', 'bubble-stream'],
     bioDensity: 0.15, // Occasional
     bioFreqBase: 150,
     grainDensity: 0.8,
-    grainTypes: ['bubble', 'droplet'],
+    grainTypes: ['bubble', 'droplet', 'foam'],
     grainFreqBase: 400,
     grainMix: 0.3,
     saturationAmount: 20, // Subtle warmth
@@ -67,11 +67,11 @@ const AUDIO_PROFILES = {
     windGain: 0.15,
     swellRate: 0.1, // Faster (10s)
     swellDepth: 0.15, // More movement
-    bioTypes: ['school', 'ray', 'dolphin'],
+    bioTypes: ['school', 'ray', 'dolphin', 'bubble-stream'],
     bioDensity: 0.4, // Active
     bioFreqBase: 2000,
     grainDensity: 0.5,
-    grainTypes: ['shimmer', 'droplet'],
+    grainTypes: ['shimmer', 'droplet', 'sand'],
     grainFreqBase: 800,
     grainMix: 0.25,
     saturationAmount: 35, // Crisper
@@ -216,17 +216,25 @@ const createImpulseResponse = (ctx, duration, decay) => {
 
   for (let i = 0; i < length; i++) {
     const n = i / length;
-    // Smoother tail curve for richer decay
-    const amp = Math.pow(1 - n, decay * 0.8);
+    // Ultra-smooth tail curve (Exponential decay)
+    const amp = Math.pow(1 - n, decay);
 
-    // Increased decorrelation and density
-    left[i] = (Math.random() * 2 - 1) * amp;
-    right[i] = (Math.random() * 2 - 1) * amp * 0.9;
+    // Decorrelated Stereo Noise
+    const whiteL = Math.random() * 2 - 1;
+    const whiteR = Math.random() * 2 - 1;
 
-    // Enhanced Early reflections
-    if (i > 500 && i < 10000) {
-        left[i] += (Math.random() * 2 - 1) * 0.5 * amp;
-        right[i] += (Math.random() * 2 - 1) * 0.5 * amp;
+    left[i] = whiteL * amp;
+    right[i] = whiteR * amp;
+
+    // Early Reflections (Dense cluster)
+    if (i < 2000) {
+       left[i] += (Math.random() * 2 - 1) * 0.5 * amp;
+       right[i] += (Math.random() * 2 - 1) * 0.5 * amp;
+    }
+    // Late Reflections (Sparsity)
+    else if (i > 2000 && i < length * 0.5 && Math.random() > 0.8) {
+       left[i] += (Math.random() * 2 - 1) * 0.3 * amp;
+       right[i] += (Math.random() * 2 - 1) * 0.3 * amp;
     }
   }
   return impulse;
@@ -273,7 +281,45 @@ const triggerGrain = (ctx, destination, params, time) => {
 
     const duration = 0.05 + Math.random() * 0.15;
 
-    if (type === 'shimmer') {
+    if (type === 'foam') {
+        // Soft, frothy low-pass noise
+        const bufferSrc = ctx.createBufferSource();
+        bufferSrc.buffer = createNoiseBuffer(ctx);
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(400 + Math.random() * 200, time);
+
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(mix * 0.8, time + duration * 0.2);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+        bufferSrc.connect(filter);
+        filter.connect(gain);
+        gain.connect(panner);
+        bufferSrc.start(time);
+        bufferSrc.stop(time + duration + 0.1);
+        return;
+    } else if (type === 'sand') {
+        // Gritty high-pass texture
+        const bufferSrc = ctx.createBufferSource();
+        bufferSrc.buffer = createNoiseBuffer(ctx);
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.setValueAtTime(2000 + Math.random() * 1000, time);
+
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(mix * 0.6, time + 0.01); // Sharp attack
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration * 0.5); // Fast decay
+
+        bufferSrc.connect(filter);
+        filter.connect(gain);
+        gain.connect(panner);
+        bufferSrc.start(time);
+        bufferSrc.stop(time + duration + 0.1);
+        return;
+    } else if (type === 'shimmer') {
         // High-Fidelity Shimmer: 5-voice detuned cluster
         const baseFreq = freqBase * (1 + Math.random() * 0.5);
         // Pentatonic-ish spread or just cluster
@@ -383,51 +429,62 @@ const triggerGrain = (ctx, destination, params, time) => {
     }
 };
 
-const triggerMelody = (ctx, destination, params, time) => {
+const triggerMotif = (ctx, destination, params, time) => {
     const { melodyScale, melodyMix } = params;
-    if (!melodyScale || !SCALES[melodyScale]) return;
+    if (!melodyScale || !SCALES[melodyScale]) return 0;
 
     const scale = SCALES[melodyScale];
-    // Simple generative logic: Pick random note
-    const freq = scale[Math.floor(Math.random() * scale.length)];
-    // Occasional octave jump for variety
-    const octave = Math.random() > 0.8 ? 2 : (Math.random() > 0.2 ? 1 : 0.5);
+    const noteCount = 2 + Math.floor(Math.random() * 3); // 2 to 4 notes per phrase
+    let currentOffset = 0;
 
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    const panner = ctx.createStereoPanner();
+    for (let i = 0; i < noteCount; i++) {
+        const noteTime = time + currentOffset;
 
-    // Soft tones
-    osc.type = Math.random() > 0.6 ? 'sine' : 'triangle';
-    osc.frequency.setValueAtTime(freq * octave, time);
+        // Simple generative logic: Pick random note, favor neighbors
+        const freq = scale[Math.floor(Math.random() * scale.length)];
+        const octave = Math.random() > 0.85 ? 2 : (Math.random() > 0.2 ? 1 : 0.5);
 
-    // Add subtle vibrato
-    const vibrato = ctx.createOscillator();
-    vibrato.frequency.value = 3 + Math.random() * 3;
-    const vibratoGain = ctx.createGain();
-    vibratoGain.gain.value = 2; // +/- 2Hz
-    vibrato.connect(vibratoGain);
-    vibratoGain.connect(osc.frequency);
-    vibrato.start(time);
-    vibrato.stop(time + 5);
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const panner = ctx.createStereoPanner();
 
-    // Slow, dreamy ADSR Envelope
-    const attack = 0.5 + Math.random() * 1.0;
-    const release = 2.0 + Math.random() * 2.0;
-    const totalDur = attack + release;
+        // Soft tones
+        osc.type = Math.random() > 0.7 ? 'sine' : 'triangle';
+        osc.frequency.setValueAtTime(freq * octave, noteTime);
 
-    gain.gain.setValueAtTime(0, time);
-    gain.gain.linearRampToValueAtTime(melodyMix || 0.1, time + attack);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + totalDur);
+        // Add subtle vibrato
+        const vibrato = ctx.createOscillator();
+        vibrato.frequency.value = 3 + Math.random() * 3;
+        const vibratoGain = ctx.createGain();
+        vibratoGain.gain.value = 2; // +/- 2Hz
+        vibrato.connect(vibratoGain);
+        vibratoGain.connect(osc.frequency);
+        vibrato.start(noteTime);
+        vibrato.stop(noteTime + 4);
 
-    panner.pan.value = Math.random() * 1.5 - 0.75;
+        // Slow, dreamy ADSR Envelope
+        const attack = 0.5 + Math.random() * 1.0;
+        const release = 2.0 + Math.random() * 2.0;
+        const noteDur = attack + release;
 
-    osc.connect(gain);
-    gain.connect(panner);
-    panner.connect(destination);
+        gain.gain.setValueAtTime(0, noteTime);
+        gain.gain.linearRampToValueAtTime(melodyMix || 0.1, noteTime + attack);
+        gain.gain.exponentialRampToValueAtTime(0.001, noteTime + noteDur);
 
-    osc.start(time);
-    osc.stop(time + totalDur + 0.1);
+        panner.pan.value = Math.random() * 1.4 - 0.7;
+
+        osc.connect(gain);
+        gain.connect(panner);
+        panner.connect(destination);
+
+        osc.start(noteTime);
+        osc.stop(noteTime + noteDur + 0.1);
+
+        // Advance time for next note (overlap allowed)
+        currentOffset += (attack + release * 0.5) * (0.5 + Math.random() * 0.5);
+    }
+
+    return currentOffset + 2; // Return approx duration of motif
 };
 
 const triggerBioSound = (ctx, destination, params, time) => {
@@ -509,7 +566,16 @@ const triggerBioSound = (ctx, destination, params, time) => {
         mainGain.gain.setValueAtTime(mix, time + duration * 0.6); // Sustain
         mainGain.gain.linearRampToValueAtTime(0, time + duration); // Release
 
-        carrier.connect(mainGain);
+        // Formant Filter for Vowel movement (Ooh -> Aah -> Ooh)
+        const formant = ctx.createBiquadFilter();
+        formant.type = 'lowpass';
+        formant.Q.value = 3;
+        formant.frequency.setValueAtTime(300, time);
+        formant.frequency.exponentialRampToValueAtTime(800, time + duration * 0.4);
+        formant.frequency.exponentialRampToValueAtTime(300, time + duration);
+
+        carrier.connect(formant);
+        formant.connect(mainGain);
         mainGain.connect(panner);
 
         carrier.start(time);
@@ -519,6 +585,31 @@ const triggerBioSound = (ctx, destination, params, time) => {
         modulator1.stop(time + duration + 0.5);
         modulator2.stop(time + duration + 0.5);
 
+    } else if (bioType === 'bubble-stream') {
+        // Ascending stream of bubbles
+        const count = 15 + Math.floor(Math.random() * 15);
+        const streamDur = 1.5 + Math.random();
+
+        for (let i = 0; i < count; i++) {
+            const t = time + (i / count) * streamDur + (Math.random() * 0.05);
+            const bOsc = ctx.createOscillator();
+            const bGain = ctx.createGain();
+
+            bOsc.type = 'sine';
+            const startFreq = 400 + Math.random() * 400;
+            // Upward glissando for rising bubbles
+            bOsc.frequency.setValueAtTime(startFreq, t);
+            bOsc.frequency.exponentialRampToValueAtTime(startFreq * 2, t + 0.1);
+
+            bGain.gain.setValueAtTime(0, t);
+            bGain.gain.linearRampToValueAtTime(mix * 0.6, t + 0.01);
+            bGain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+
+            bOsc.connect(bGain);
+            bGain.connect(panner);
+            bOsc.start(t);
+            bOsc.stop(t + 0.15);
+        }
     } else if (bioType === 'dolphin') {
         // Clicks + Whistles
         const isClick = Math.random() > 0.5;
@@ -1123,6 +1214,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         const droneGain = ctx.createGain();
         droneGain.gain.value = 0.15;
 
+        // LFO 1: Amplitude Modulation
         const droneLFO = ctx.createOscillator();
         droneLFO.type = 'sine';
         droneLFO.frequency.value = 0.08;
@@ -1136,6 +1228,17 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         const droneFilter = ctx.createBiquadFilter();
         droneFilter.type = 'lowpass';
         droneFilter.frequency.value = 400;
+
+        // LFO 2: Slow Filter Sweep (Timbral Evolution)
+        const droneFilterLFO = ctx.createOscillator();
+        droneFilterLFO.type = 'sine';
+        droneFilterLFO.frequency.value = 0.02; // 50s cycle
+        const droneFilterLFOGain = ctx.createGain();
+        droneFilterLFOGain.gain.value = 100; // +/- 100Hz
+
+        droneFilterLFO.connect(droneFilterLFOGain);
+        droneFilterLFOGain.connect(droneFilter.frequency);
+        droneFilterLFO.start();
 
         // Base Oscillators
         const droneBase = ctx.createOscillator();
@@ -1391,14 +1494,15 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
             }
 
             if (nextMelodyTime < currentTime + scheduleAheadTime) {
-                // Stochastic rhythm
-                // Rate 0.1 = sparse (10s avg), 1.0 = active (1s avg)
-                const rate = Math.max(0.05, Math.min(2.0, granularParams.melodyRate || 0.1));
-                const baseInterval = 1 / rate;
-                const interval = baseInterval * (0.5 + Math.random()); // Random variation
+                // Trigger a full melodic phrase (motif)
+                const motifDur = triggerMotif(ctx, melodyGain, granularParams, nextMelodyTime);
 
-                triggerMelody(ctx, melodyGain, granularParams, nextMelodyTime);
-                nextMelodyTime += interval;
+                // Pause based on rate
+                const rate = Math.max(0.05, Math.min(2.0, granularParams.melodyRate || 0.1));
+                const basePause = (1 / rate) * 4; // Longer pause between phrases
+                const pause = basePause * (0.5 + Math.random());
+
+                nextMelodyTime += motifDur + pause;
             }
         };
 
