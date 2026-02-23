@@ -97,7 +97,7 @@ const AUDIO_PROFILES = {
     windGain: 0.1,
     swellRate: 0.08,
     swellDepth: 0.12,
-    bioTypes: ['jellyfish', 'school', 'growl'],
+    bioTypes: ['jellyfish', 'school', 'growl', 'chorus'],
     bioDensity: 0.6,
     bioFreqBase: 600,
     grainDensity: 0.4,
@@ -107,7 +107,7 @@ const AUDIO_PROFILES = {
     saturationAmount: 50, // Rich/Hot
     formantMix: 0.4, // Strong vowel resonance (Om-like)
     shimmerFreq: 3000,
-    shimmerMix: 0.06,
+    shimmerMix: 0.1, // Boosted shimmer
     breathMix: 0.1,
     melodyScale: 'indian',
     melodyRate: 0.25,
@@ -127,8 +127,8 @@ const AUDIO_PROFILES = {
     windGain: 0.25,
     swellRate: 0.15,
     swellDepth: 0.2, // Stormy
-    bioTypes: ['whale', 'ray', 'growl'],
-    bioDensity: 0.3,
+    bioTypes: ['whale', 'ray', 'growl', 'chorus'],
+    bioDensity: 0.35,
     bioFreqBase: 100,
     grainDensity: 0.3,
     grainTypes: ['ice', 'shimmer'],
@@ -274,12 +274,14 @@ const triggerGrain = (ctx, destination, params, time) => {
         ? grainTypes[Math.floor(Math.random() * grainTypes.length)]
         : params.type || 'bubble';
 
+    const duration = 0.05 + Math.random() * 0.15;
+
     const panner = ctx.createStereoPanner();
     const pan = Math.random() * 1.5 - 0.75;
-    panner.pan.value = pan;
+    // Subtle movement for grains
+    panner.pan.setValueAtTime(pan, time);
+    panner.pan.linearRampToValueAtTime(pan + (Math.random() * 0.2 - 0.1), time + duration);
     panner.connect(destination);
-
-    const duration = 0.05 + Math.random() * 0.15;
 
     if (type === 'foam') {
         // Soft, frothy low-pass noise
@@ -436,52 +438,75 @@ const triggerMotif = (ctx, destination, params, time) => {
     const scale = SCALES[melodyScale];
     const noteCount = 2 + Math.floor(Math.random() * 3); // 2 to 4 notes per phrase
     let currentOffset = 0;
+    let lastNoteIndex = Math.floor(Math.random() * scale.length);
 
     for (let i = 0; i < noteCount; i++) {
         const noteTime = time + currentOffset;
 
-        // Simple generative logic: Pick random note, favor neighbors
-        const freq = scale[Math.floor(Math.random() * scale.length)];
+        // Smart Melody: Random Walk (bias towards neighbors)
+        const step = Math.floor(Math.random() * 3) - 1; // -1, 0, 1
+        let noteIndex = lastNoteIndex + step;
+
+        // Clamp to scale
+        if (noteIndex < 0) noteIndex = 0;
+        if (noteIndex >= scale.length) noteIndex = scale.length - 1;
+        lastNoteIndex = noteIndex;
+
+        const baseFreq = scale[noteIndex];
         const octave = Math.random() > 0.85 ? 2 : (Math.random() > 0.2 ? 1 : 0.5);
+        const freqs = [baseFreq * octave];
 
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        const panner = ctx.createStereoPanner();
+        // Harmony Logic: 30% chance of a second voice (3rd or 5th)
+        if (Math.random() > 0.7) {
+            const harmonyInterval = Math.random() > 0.5 ? 2 : 4; // 3rd or 5th (indices)
+            const harmonyIndex = (noteIndex + harmonyInterval) % scale.length;
+            freqs.push(scale[harmonyIndex] * octave);
+        }
 
-        // Soft tones
-        osc.type = Math.random() > 0.7 ? 'sine' : 'triangle';
-        osc.frequency.setValueAtTime(freq * octave, noteTime);
+        freqs.forEach((freq) => {
+             const osc = ctx.createOscillator();
+             const gain = ctx.createGain();
+             const panner = ctx.createStereoPanner();
 
-        // Add subtle vibrato
-        const vibrato = ctx.createOscillator();
-        vibrato.frequency.value = 3 + Math.random() * 3;
-        const vibratoGain = ctx.createGain();
-        vibratoGain.gain.value = 2; // +/- 2Hz
-        vibrato.connect(vibratoGain);
-        vibratoGain.connect(osc.frequency);
-        vibrato.start(noteTime);
-        vibrato.stop(noteTime + 4);
+             // Soft tones
+             osc.type = Math.random() > 0.7 ? 'sine' : 'triangle';
+             osc.frequency.setValueAtTime(freq, noteTime);
 
-        // Slow, dreamy ADSR Envelope
-        const attack = 0.5 + Math.random() * 1.0;
-        const release = 2.0 + Math.random() * 2.0;
-        const noteDur = attack + release;
+             // Add subtle vibrato
+             const vibrato = ctx.createOscillator();
+             vibrato.frequency.value = 3 + Math.random() * 3;
+             const vibratoGain = ctx.createGain();
+             vibratoGain.gain.value = 2; // +/- 2Hz
+             vibrato.connect(vibratoGain);
+             vibratoGain.connect(osc.frequency);
+             vibrato.start(noteTime);
+             vibrato.stop(noteTime + 4);
 
-        gain.gain.setValueAtTime(0, noteTime);
-        gain.gain.linearRampToValueAtTime(melodyMix || 0.1, noteTime + attack);
-        gain.gain.exponentialRampToValueAtTime(0.001, noteTime + noteDur);
+             // Slow, dreamy ADSR Envelope
+             const attack = 0.5 + Math.random() * 1.0;
+             const release = 2.0 + Math.random() * 2.0;
+             const noteDur = attack + release;
 
-        panner.pan.value = Math.random() * 1.4 - 0.7;
+             gain.gain.setValueAtTime(0, noteTime);
+             gain.gain.linearRampToValueAtTime(melodyMix || 0.1, noteTime + attack);
+             gain.gain.exponentialRampToValueAtTime(0.001, noteTime + noteDur);
 
-        osc.connect(gain);
-        gain.connect(panner);
-        panner.connect(destination);
+             // Dynamic Spatialization: Move the sound
+             const startPan = Math.random() * 1.4 - 0.7;
+             const endPan = startPan + (Math.random() * 0.4 - 0.2); // Gentle shift
+             panner.pan.setValueAtTime(startPan, noteTime);
+             panner.pan.linearRampToValueAtTime(Math.max(-1, Math.min(1, endPan)), noteTime + noteDur);
 
-        osc.start(noteTime);
-        osc.stop(noteTime + noteDur + 0.1);
+             osc.connect(gain);
+             gain.connect(panner);
+             panner.connect(destination);
+
+             osc.start(noteTime);
+             osc.stop(noteTime + noteDur + 0.1);
+        });
 
         // Advance time for next note (overlap allowed)
-        currentOffset += (attack + release * 0.5) * (0.5 + Math.random() * 0.5);
+        currentOffset += (0.5 + Math.random() * 1.5) * (0.5 + Math.random() * 0.5);
     }
 
     return currentOffset + 2; // Return approx duration of motif
@@ -498,13 +523,21 @@ const triggerBioSound = (ctx, destination, params, time) => {
     const mix = 0.25; // Slightly boosted
 
     const panner = ctx.createStereoPanner();
-    const pan = Math.random() * 1.8 - 0.9;
-    panner.pan.value = pan;
+
+    // Dynamic Spatialization base logic
+    const startPan = Math.random() * 1.8 - 0.9;
+    panner.pan.setValueAtTime(startPan, time);
+    // Note: Long sounds will override this with a ramp
+
     panner.connect(destination);
 
     if (bioType === 'whale') {
         // High-Fidelity FM Whale Call (Dual Modulator)
         const duration = 3 + Math.random() * 4;
+
+        // Dynamic Movement
+        panner.pan.linearRampToValueAtTime(Math.max(-1, Math.min(1, startPan + (Math.random() > 0.5 ? 0.8 : -0.8))), time + duration);
+
         const breathMix = params.breathMix || 0.1;
 
         // Breath/Water Noise (Procedural Texture)
@@ -726,6 +759,9 @@ const triggerBioSound = (ctx, destination, params, time) => {
         // Majestic Sweep (Doppler-ish Noise + Sub Swell)
         const duration = 4 + Math.random() * 2;
 
+        // Dynamic Movement (Wide sweep)
+        panner.pan.linearRampToValueAtTime(Math.max(-1, Math.min(1, -startPan)), time + duration);
+
         // 1. Noise Sweep
         const noise = ctx.createBufferSource();
         noise.buffer = createNoiseBuffer(ctx);
@@ -844,6 +880,9 @@ const triggerBioSound = (ctx, destination, params, time) => {
         const count = 25;
         const swarmDuration = 2;
 
+        // Swarm moves as a group
+        panner.pan.linearRampToValueAtTime(startPan + (Math.random() * 0.4 - 0.2), time + swarmDuration);
+
         for(let i=0; i<count; i++) {
             const t = time + Math.random() * swarmDuration;
             const grainDur = 0.1 + Math.random() * 0.1;
@@ -855,7 +894,7 @@ const triggerBioSound = (ctx, destination, params, time) => {
             osc.frequency.value = bioFreqBase * (0.8 + Math.random() * 0.4);
             osc.type = Math.random() > 0.5 ? 'sine' : 'triangle';
 
-            gPanner.pan.value = (Math.random() * 2 - 1) * 0.5; // Narrower spread
+            gPanner.pan.value = (Math.random() * 2 - 1) * 0.5; // Narrower spread relative to group
 
             gGain.gain.setValueAtTime(0, t);
             gGain.gain.linearRampToValueAtTime(mix * 0.3, t + grainDur * 0.5);
@@ -868,6 +907,56 @@ const triggerBioSound = (ctx, destination, params, time) => {
             osc.start(t);
             osc.stop(t + grainDur + 0.1);
         }
+    } else if (bioType === 'chorus') {
+        // Ethereal Vocal Cluster (New Ultrathink Layer)
+        const duration = 4 + Math.random() * 2;
+        const baseFreq = bioFreqBase || 200;
+
+        // Source: Filtered Sawtooth (Choir-ish)
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(baseFreq, time);
+
+        // Dynamic Movement
+        panner.pan.linearRampToValueAtTime(Math.max(-1, Math.min(1, startPan + (Math.random() * 1.0 - 0.5))), time + duration);
+
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(baseFreq * 1.5, time);
+        filter.Q.value = 1;
+
+        // Chorus Effect via Delay Modulation
+        if (ctx.createDelay) {
+             const delay = ctx.createDelay();
+             delay.delayTime.value = 0.03; // 30ms
+
+             const delayLFO = ctx.createOscillator();
+             delayLFO.frequency.value = 0.5 + Math.random();
+             const delayLFOGain = ctx.createGain();
+             delayLFOGain.gain.value = 0.002; // +/- 2ms depth
+
+             delayLFO.connect(delayLFOGain);
+             delayLFOGain.connect(delay.delayTime);
+             delayLFO.start(time);
+             delayLFO.stop(time + duration);
+
+             osc.connect(filter);
+             filter.connect(delay);
+             delay.connect(gain);
+        } else {
+             osc.connect(filter);
+             filter.connect(gain);
+        }
+
+        gain.connect(panner);
+
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(mix * 0.6, time + 1.5); // Slow, ghostly attack
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+        osc.start(time);
+        osc.stop(time + duration + 0.2);
     }
 };
 
@@ -1240,6 +1329,21 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         droneFilterLFOGain.connect(droneFilter.frequency);
         droneFilterLFO.start();
 
+        // Phaser Effect (Evolving Texture) - Ultrathink Upgrade
+        const phaserFilter = ctx.createBiquadFilter();
+        phaserFilter.type = 'allpass';
+        phaserFilter.frequency.value = 1000;
+        phaserFilter.Q.value = 1;
+
+        const phaserLFO = ctx.createOscillator();
+        phaserLFO.frequency.value = 0.05; // Slow sweep
+        const phaserLFOGain = ctx.createGain();
+        phaserLFOGain.gain.value = 500; // +/- 500Hz
+
+        phaserLFO.connect(phaserLFOGain);
+        phaserLFOGain.connect(phaserFilter.frequency);
+        phaserLFO.start();
+
         // Base Oscillators
         const droneBase = ctx.createOscillator();
         droneBase.type = 'sine';
@@ -1299,9 +1403,10 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
 
         droneGain.connect(droneFilter);
 
-        // Direct path
-        droneFilter.connect(convolver);
-        droneFilter.connect(dryGain);
+        // Direct path (via Phaser)
+        droneFilter.connect(phaserFilter);
+        phaserFilter.connect(convolver);
+        phaserFilter.connect(dryGain);
 
         // Formant path (added to direct)
         droneFilter.connect(f1);
@@ -1522,6 +1627,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
             shimmerGain, shimmerOsc1, shimmerOsc2,
             shimmerLFO1, shimmerLFO2, shimmerAM1, shimmerAM2,
             swellLFO, swellGain,
+            phaserLFO, // Track for cleanup
             saturator,
             convolver,
             granularInterval, granularParams
