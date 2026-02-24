@@ -15,18 +15,24 @@ describe('useOceanSound', () => {
 
   beforeEach(() => {
     // Mock AudioContext and related nodes
+    const createAudioParamMock = (initialValue = 0) => ({
+      value: initialValue,
+      setValueAtTime: vi.fn(),
+      linearRampToValueAtTime: vi.fn(),
+      exponentialRampToValueAtTime: vi.fn(),
+      setTargetAtTime: vi.fn(),
+      cancelScheduledValues: vi.fn(),
+    });
+
     gainNodeMock = {
-      gain: {
-        value: 0,
-        cancelScheduledValues: vi.fn(),
-        setTargetAtTime: vi.fn(),
-      },
+      gain: createAudioParamMock(0),
       connect: vi.fn(),
     };
 
     oscillatorMock = {
         type: 'sine',
-        frequency: { value: 0, setTargetAtTime: vi.fn() },
+        frequency: createAudioParamMock(0),
+        detune: createAudioParamMock(0),
         connect: vi.fn(),
         start: vi.fn(),
         stop: vi.fn(),
@@ -42,8 +48,9 @@ describe('useOceanSound', () => {
 
     biquadFilterMock = {
         type: '',
-        frequency: { value: 0, setTargetAtTime: vi.fn() },
-        Q: { value: 0 },
+        frequency: createAudioParamMock(0),
+        Q: createAudioParamMock(0),
+        gain: createAudioParamMock(0),
         connect: vi.fn(),
     };
 
@@ -53,16 +60,21 @@ describe('useOceanSound', () => {
     };
 
     const stereoPannerMock = {
-        pan: { value: 0, setTargetAtTime: vi.fn(), cancelScheduledValues: vi.fn() },
+        pan: createAudioParamMock(0),
+        connect: vi.fn(),
+    };
+
+    const delayNodeMock = {
+        delayTime: createAudioParamMock(0),
         connect: vi.fn(),
     };
 
     dynamicsCompressorMock = {
-        threshold: { value: 0, setTargetAtTime: vi.fn() },
-        knee: { value: 0, setTargetAtTime: vi.fn() },
-        ratio: { value: 0, setTargetAtTime: vi.fn() },
-        attack: { value: 0, setTargetAtTime: vi.fn() },
-        release: { value: 0, setTargetAtTime: vi.fn() },
+        threshold: createAudioParamMock(0),
+        knee: createAudioParamMock(0),
+        ratio: createAudioParamMock(0),
+        attack: createAudioParamMock(0),
+        release: createAudioParamMock(0),
         connect: vi.fn(),
     };
 
@@ -79,6 +91,7 @@ describe('useOceanSound', () => {
             this.createOscillator = vi.fn(() => oscillatorMock);
             this.createBufferSource = vi.fn(() => bufferSourceMock);
             this.createBiquadFilter = vi.fn(() => biquadFilterMock);
+            this.createDelay = vi.fn(() => delayNodeMock);
             this.createDynamicsCompressor = vi.fn(() => dynamicsCompressorMock);
             this.createConvolver = vi.fn(() => convolverMock);
             this.createStereoPanner = vi.fn(() => stereoPannerMock);
