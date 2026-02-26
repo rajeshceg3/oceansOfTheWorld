@@ -7,12 +7,21 @@ import { OCEANS } from '../data/oceans';
 // 1. Deep (Rumble/Sub) - Stereo Brown Noise with slow panning
 // 2. Surface (Swell/Waves) - Stereo Pink Noise with phase-offset LFOs
 // 3. Texture (Sparkle/Ice/Bubbles) - High-passed White Noise + Random Envelope / Granular Simulation
-// 4. Drone (Tonal Ambience) - Multi-Oscillator Cluster + Formant Filters (Vowel Tones) + Sub-Harmonic
+// 4. Drone (Tonal Ambience) - Multi-Oscillator Cluster + Formant Filters (Vowel Tones) + Sub-Harmonic + Abyssal AM
 // 5. Binaural (Brainwave Entrainment) - Left/Right Frequency Delta for Alpha/Theta waves
 // 6. Bio (Life) - Procedural Marine Creatures (Whales, Clicks, Chirps, Schools, Rays, Jellyfish) - Complex FM Synthesis
 // 7. Swell (Movement) - Very slow amplitude modulation (breathing)
 // 8. Saturation (Warmth) - Analog tube simulation via WaveShaping
 // 9. Melody (Thought) - Generative musical phrases based on ocean mood (Pentatonic/Modal scales)
+// 10. Spectral Shimmer - High-frequency texture layer
+
+const BINAURAL_FREQS = {
+  delta: 2.5,  // 0.5-4Hz (Deep Sleep, Healing)
+  theta: 6.0,  // 4-8Hz (Deep Relaxation, Creativity)
+  alpha: 10.0, // 8-12Hz (Relaxed Focus, Flow)
+  beta: 20.0,  // 12-30Hz (Alert, Active)
+  gamma: 40.0  // 30-100Hz (Peak Focus, Insight)
+};
 
 const SCALES = {
   pacific: [261.63, 293.66, 329.63, 392.00, 440.00, 523.25], // C Major Pentatonic (Calm, Bright)
@@ -20,6 +29,8 @@ const SCALES = {
   indian: [349.23, 392.00, 440.00, 493.88, 523.25, 587.33, 659.25], // F Lydian (Dreamy, floating)
   southern: [440.00, 493.88, 523.25, 587.33, 659.25, 698.46, 783.99], // A Aeolian (Sad, cold)
   arctic: [329.63, 349.23, 392.00, 440.00, 493.88, 523.25, 587.33], // E Phrygian (Dark, tense)
+  hirajoshi: [261.63, 293.66, 311.13, 392.00, 415.30, 523.25], // C Hirajoshi (Eastern, contemplative)
+  wholetone: [261.63, 293.66, 329.63, 369.99, 415.30, 466.16], // C Whole Tone (Dreamy, unresolved)
 };
 
 const AUDIO_PROFILES = {
@@ -31,7 +42,7 @@ const AUDIO_PROFILES = {
     harmonic: 1.5, // 5th
     subBassFreq: 40,
     verbDecay: 5,
-    binauralDelta: 7.83, // Schumann Resonance (Relaxed Alertness)
+    binauralDelta: BINAURAL_FREQS.alpha, // Relaxed Focus
     detune: 5, // Cents
     windFreq: 400,
     windGain: 0.08,
@@ -49,12 +60,14 @@ const AUDIO_PROFILES = {
     saturationAmount: 20, // Subtle warmth
     formantMix: 0.2, // Mild vowel character
     shimmerFreq: 4000,
-    shimmerMix: 0.05,
+    shimmerMix: 0.1, // Enhanced sparkle
+    sparkleDensity: 0.2,
     resonatorMix: 0.1, // Singing resonance
     breathMix: 0.1,
-    melodyScale: 'pacific',
+    melodyScale: 'hirajoshi', // Japanese Pentatonic (Calm)
     melodyRate: 0.2, // Sparse
-    melodyMix: 0.15
+    melodyMix: 0.15,
+    droneSubMix: 0.2, // Added depth
   },
   atlantic: {
     baseFreq: 80,
@@ -64,7 +77,7 @@ const AUDIO_PROFILES = {
     harmonic: 1.25, // Major 3rd
     subBassFreq: 45,
     verbDecay: 3.5,
-    binauralDelta: 10, // Alpha (Calm focus)
+    binauralDelta: BINAURAL_FREQS.beta, // Active focus
     detune: 8,
     windFreq: 700,
     windGain: 0.15,
@@ -83,11 +96,13 @@ const AUDIO_PROFILES = {
     formantMix: 0.1,
     shimmerFreq: 5000,
     shimmerMix: 0.08,
+    sparkleDensity: 0.3,
     resonatorMix: 0.15,
     breathMix: 0.1,
     melodyScale: 'atlantic',
     melodyRate: 0.3,
-    melodyMix: 0.2
+    melodyMix: 0.2,
+    droneSubMix: 0.3,
   },
   indian: {
     baseFreq: 70,
@@ -97,7 +112,7 @@ const AUDIO_PROFILES = {
     harmonic: 1.5,
     subBassFreq: 38,
     verbDecay: 4.5,
-    binauralDelta: 6, // Theta (Deep relaxation)
+    binauralDelta: BINAURAL_FREQS.theta, // Deep relaxation
     detune: 6,
     windFreq: 500,
     windGain: 0.1,
@@ -115,12 +130,14 @@ const AUDIO_PROFILES = {
     saturationAmount: 50, // Rich/Hot
     formantMix: 0.4, // Strong vowel resonance (Om-like)
     shimmerFreq: 3000,
-    shimmerMix: 0.1, // Boosted shimmer
+    shimmerMix: 0.15, // Boosted shimmer
+    sparkleDensity: 0.4,
     resonatorMix: 0.25, // Very resonant/dreamy
     breathMix: 0.1,
     melodyScale: 'indian',
     melodyRate: 0.25,
-    melodyMix: 0.25
+    melodyMix: 0.25,
+    droneSubMix: 0.4,
   },
   southern: {
     baseFreq: 90,
@@ -130,7 +147,7 @@ const AUDIO_PROFILES = {
     harmonic: 2.0, // Octave
     subBassFreq: 50,
     verbDecay: 6,
-    binauralDelta: 4, // Low Theta (Dreamy)
+    binauralDelta: BINAURAL_FREQS.delta, // Deep sleep/dream
     detune: 12,
     windFreq: 1000,
     windGain: 0.25,
@@ -149,11 +166,13 @@ const AUDIO_PROFILES = {
     formantMix: 0.15,
     shimmerFreq: 6000,
     shimmerMix: 0.1,
+    sparkleDensity: 0.5,
     resonatorMix: 0.1,
     breathMix: 0.1,
-    melodyScale: 'southern',
+    melodyScale: 'wholetone', // Dreamy/Unresolved
     melodyRate: 0.15,
-    melodyMix: 0.1
+    melodyMix: 0.1,
+    droneSubMix: 0.5,
   },
   arctic: {
     baseFreq: 100,
@@ -163,7 +182,7 @@ const AUDIO_PROFILES = {
     harmonic: 2.0,
     subBassFreq: 35,
     verbDecay: 8,
-    binauralDelta: 14, // Beta (Focus/Alert)
+    binauralDelta: BINAURAL_FREQS.gamma, // Insight/Clarity
     detune: 10,
     windFreq: 1500,
     windGain: 0.35,
@@ -181,12 +200,14 @@ const AUDIO_PROFILES = {
     saturationAmount: 40, // Harsh/Biting
     formantMix: 0.05,
     shimmerFreq: 7000,
-    shimmerMix: 0.15,
+    shimmerMix: 0.3, // Icy Sparkle
+    sparkleDensity: 0.6,
     resonatorMix: 0.2, // Singing ice
     breathMix: 0.1,
     melodyScale: 'arctic',
     melodyRate: 0.1, // Sparse
-    melodyMix: 0.2
+    melodyMix: 0.2,
+    droneSubMix: 0.2,
   }
 };
 
@@ -222,7 +243,7 @@ const createBrownNoiseBuffer = (ctx) => {
   return buffer;
 };
 
-const createImpulseResponse = (ctx, duration, decay) => {
+const createImpulseResponse = (ctx, duration, decay, brightness = 1.0) => {
   const rate = ctx.sampleRate;
   const length = rate * duration;
   const impulse = ctx.createBuffer(2, length, rate);
@@ -235,8 +256,14 @@ const createImpulseResponse = (ctx, duration, decay) => {
     const amp = Math.pow(1 - n, decay);
 
     // Decorrelated Stereo Noise
-    const whiteL = Math.random() * 2 - 1;
-    const whiteR = Math.random() * 2 - 1;
+    let whiteL = Math.random() * 2 - 1;
+    let whiteR = Math.random() * 2 - 1;
+
+    // Brightness Control (Low-pass filter approximation via moving average)
+    if (i > 0 && brightness < 1.0) {
+        whiteL = (whiteL + left[i-1] * (1 - brightness)) / (2 - brightness);
+        whiteR = (whiteR + right[i-1] * (1 - brightness)) / (2 - brightness);
+    }
 
     left[i] = whiteL * amp;
     right[i] = whiteR * amp;
@@ -249,14 +276,43 @@ const createImpulseResponse = (ctx, duration, decay) => {
     }
 
     // "Shimmer" Tail - High frequency sparkles in the reverb
-    if (i > 10000 && Math.random() > 0.95) {
-       const shimmerAmp = amp * 0.4;
+    // Enhanced for Ultrathink: More density in the tail
+    if (i > 10000 && Math.random() > (0.95 - (brightness * 0.02))) {
+       const shimmerAmp = amp * 0.4 * brightness;
        // Add a high-frequency burst
        left[i] += (Math.random() * 2 - 1) * shimmerAmp;
        right[i] += (Math.random() * 2 - 1) * shimmerAmp;
     }
   }
   return impulse;
+};
+
+const triggerSparkle = (ctx, destination, time, mix) => {
+    // Ultrathink Bioluminescence: High-frequency sine clusters
+    const panner = ctx.createStereoPanner();
+    panner.pan.value = Math.random() * 2 - 1;
+    panner.connect(destination);
+
+    const count = 3 + Math.floor(Math.random() * 4);
+    for(let i=0; i<count; i++) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        // Very high, crystalline frequencies
+        osc.frequency.value = 3000 + Math.random() * 4000;
+
+        const t = time + Math.random() * 0.2;
+        const dur = 0.05 + Math.random() * 0.1;
+
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(mix * 0.4, t + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+        osc.connect(gain);
+        gain.connect(panner);
+        osc.start(t);
+        osc.stop(t + dur + 0.1);
+    }
 };
 
 const createNoiseBuffer = (ctx) => {
@@ -588,75 +644,72 @@ const triggerMotif = (ctx, destination, params, time) => {
     if (!melodyScale || !SCALES[melodyScale]) return 0;
 
     const scale = SCALES[melodyScale];
-    // Ultrathink Melody: Markov Chain & Weighted Probability
-    const noteCount = 3 + Math.floor(Math.random() * 4); // 3 to 6 notes for longer thoughts
+    // Ultrathink Melody: Markov Chain Generation
+    // Defines transition probabilities for more musical phrasing
+    const noteCount = 4 + Math.floor(Math.random() * 5); // 4 to 8 notes
     let currentOffset = 0;
 
-    // Choose a starting note (center of scale bias)
-    let lastNoteIndex = Math.floor(scale.length / 2) + (Math.random() > 0.5 ? 1 : -1);
+    // Markov State: Index in scale
+    // Bias towards center for start
+    let lastNoteIndex = Math.floor(scale.length / 2);
 
     for (let i = 0; i < noteCount; i++) {
         const noteTime = time + currentOffset;
 
-        // Weighted Note Selection (Probabilistic Step)
-        // 50% Step +/- 1
-        // 30% Leap +/- 2 or 3
-        // 20% Stay
+        // Markov Transition Logic
         const r = Math.random();
         let step = 0;
-        if (r < 0.5) {
-             step = Math.random() > 0.5 ? 1 : -1;
+
+        // 40% Step (smooth motion)
+        // 30% Thirds (musical skips)
+        // 10% Repeat
+        // 20% Large Leap (octave or 5th)
+        if (r < 0.4) {
+            step = Math.random() > 0.5 ? 1 : -1;
+        } else if (r < 0.7) {
+            step = Math.random() > 0.5 ? 2 : -2;
         } else if (r < 0.8) {
-             step = Math.random() > 0.5 ? 2 : -2;
-             if (Math.random() > 0.5) step += (step > 0 ? 1 : -1); // Make it a 3rd sometimes
+            step = 0;
         } else {
-             step = 0;
+            step = Math.random() > 0.5 ? 4 : -4; // 5thish leap
         }
 
         let noteIndex = lastNoteIndex + step;
 
-        // Bounce off edges logic instead of clamp (keeps motion fluid)
+        // Reflect boundaries
         if (noteIndex < 0) noteIndex = -noteIndex;
-        if (noteIndex >= scale.length) noteIndex = scale.length - (noteIndex - scale.length) - 1;
+        if (noteIndex >= scale.length) noteIndex = scale.length - 1 - (noteIndex - scale.length);
 
-        // Safety clamp
+        // Clamp final safety
         noteIndex = Math.max(0, Math.min(scale.length - 1, noteIndex));
-
         lastNoteIndex = noteIndex;
 
         const baseFreq = scale[noteIndex];
-        // Lower probability of high octave for "deeper thoughts"
-        const octave = Math.random() > 0.9 ? 2 : (Math.random() > 0.4 ? 1 : 0.5);
-        const freqs = [baseFreq * octave];
+        // Octave handling: Lower bias
+        const octave = Math.random() > 0.85 ? 2 : (Math.random() > 0.3 ? 1 : 0.5);
 
-        // Complex Harmony: 40% chance (Add 3rd, 5th, or 7th)
-        if (Math.random() > 0.6) {
-            const harmonyIntervals = [2, 4, 6]; // 3rd, 5th, 7th indices in diatonic/pentatonic
-            const interval = harmonyIntervals[Math.floor(Math.random() * harmonyIntervals.length)];
-            const harmonyIndex = (noteIndex + interval) % scale.length;
-            freqs.push(scale[harmonyIndex] * octave);
+        // Ultrathink Detuning: Drift for organic feel
+        const drift = Math.random() * 2 - 1; // +/- 1Hz
 
-            // 10% chance of a triad
-            if (Math.random() > 0.9) {
-                 const triIndex = (noteIndex + interval + 2) % scale.length;
-                 freqs.push(scale[triIndex] * octave);
-            }
+        const freqs = [(baseFreq * octave) + drift];
+
+        // Ultrathink Harmony: 50% chance of counterpoint
+        if (Math.random() > 0.5) {
+            // Add a perfect 5th or 4th below/above
+            const interval = Math.random() > 0.5 ? 1.5 : 1.333;
+            freqs.push(freqs[0] * interval);
         }
 
         freqs.forEach((freq, idx) => {
-             // Ultrathink FM Synthesis: Bell & Glass Textures
+             // FM Synthesis
              const carrier = ctx.createOscillator();
              const modulator = ctx.createOscillator();
              const modGain = ctx.createGain();
              const gain = ctx.createGain();
              const panner = ctx.createStereoPanner();
 
-             // FM Ratios determine timbre
-             // 1:1 = Harmonic (Wood/String)
-             // 1:2 = Bell
-             // Non-integer (e.g. 1:1.41) = Metallic/Glass
-             const isMetallic = Math.random() > 0.6;
-             const ratio = isMetallic ? (1 + Math.random()) : (Math.random() > 0.5 ? 2 : 1);
+             // Glassy/Metallic Ratios
+             const ratio = 2 + (Math.random() * 0.05); // Imperfect integer ratio
 
              carrier.type = 'sine';
              carrier.frequency.setValueAtTime(freq, noteTime);
@@ -664,40 +717,25 @@ const triggerMotif = (ctx, destination, params, time) => {
              modulator.type = 'sine';
              modulator.frequency.value = freq * ratio;
 
-             // FM Index Envelope (Brightness evolution)
-             // High index start -> Low index end = "Pang" sound
-             const index = isMetallic ? 600 : 300;
+             const index = 400 + Math.random() * 200;
              modGain.gain.setValueAtTime(index, noteTime);
-             modGain.gain.exponentialRampToValueAtTime(1, noteTime + 1.5); // Bright attack, dull decay
+             modGain.gain.exponentialRampToValueAtTime(1, noteTime + 2.0);
 
              modulator.connect(modGain);
              modGain.connect(carrier.frequency);
 
-             // Enhanced Vibrato
-             const vibrato = ctx.createOscillator();
-             vibrato.frequency.value = 2 + Math.random() * 3;
-             const vibratoGain = ctx.createGain();
-             vibratoGain.gain.value = idx === 0 ? 3 : 1;
-             vibrato.connect(vibratoGain);
-             vibratoGain.connect(carrier.frequency); // Modulate carrier
-             vibrato.start(noteTime);
-             vibrato.stop(noteTime + 6);
-
-             // Amplitude Envelopes
-             const isSwell = Math.random() > 0.3;
-             const attack = isSwell ? (0.8 + Math.random() * 1.5) : 0.02;
-             const release = isSwell ? (3.0 + Math.random() * 2.5) : (2.0 + Math.random());
-             const noteDur = attack + release;
+             // Envelope
+             const attack = 0.02 + Math.random() * 0.05;
+             const release = 2.0 + Math.random();
+             const dur = attack + release;
 
              gain.gain.setValueAtTime(0, noteTime);
-             gain.gain.linearRampToValueAtTime(melodyMix || 0.1, noteTime + attack);
-             gain.gain.exponentialRampToValueAtTime(0.001, noteTime + noteDur);
+             gain.gain.linearRampToValueAtTime(melodyMix * (idx > 0 ? 0.6 : 1), noteTime + attack);
+             gain.gain.exponentialRampToValueAtTime(0.001, noteTime + dur);
 
-             // Dynamic Spatialization
-             const startPan = Math.random() * 1.6 - 0.8;
-             const endPan = startPan + (Math.random() * 0.6 - 0.3);
-             panner.pan.setValueAtTime(startPan, noteTime);
-             panner.pan.linearRampToValueAtTime(Math.max(-1, Math.min(1, endPan)), noteTime + noteDur);
+             // Spatial
+             const pan = (Math.random() * 2 - 1) * 0.7;
+             panner.pan.setValueAtTime(pan, noteTime);
 
              carrier.connect(gain);
              gain.connect(panner);
@@ -705,17 +743,17 @@ const triggerMotif = (ctx, destination, params, time) => {
 
              carrier.start(noteTime);
              modulator.start(noteTime);
-             carrier.stop(noteTime + noteDur + 0.1);
-             modulator.stop(noteTime + noteDur + 0.1);
+             carrier.stop(noteTime + dur + 0.1);
+             modulator.stop(noteTime + dur + 0.1);
         });
 
-        // Rhythmic Variation
-        // Longer notes have longer gaps, sometimes clusters
-        const rhythm = (0.5 + Math.random() * 1.5);
-        currentOffset += rhythm * (Math.random() > 0.8 ? 2 : 1);
+        // Rhythmic Spacing (Humanized)
+        // Shorter notes for steps, longer for leaps
+        const baseDuration = (Math.abs(step) > 2) ? 0.8 : 0.4;
+        currentOffset += baseDuration * (0.8 + Math.random() * 0.4);
     }
 
-    return currentOffset + 3;
+    return currentOffset + 2; // Return total duration + pause
 };
 
 const triggerBioSound = (ctx, destination, params, time) => {
@@ -1232,9 +1270,12 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
     nodes.droneDetune2.frequency.setTargetAtTime(profile.droneFreq - (profile.detune/100), now, rampTime);
     nodes.droneHarmonic.frequency.setTargetAtTime(profile.droneFreq * profile.harmonic, now, rampTime);
 
-    // Sub-harmonic drone (New)
+    // Sub-harmonic drone (New Abyssal Layer)
     if (nodes.droneSub) {
         nodes.droneSub.frequency.setTargetAtTime(profile.droneFreq * 0.5, now, rampTime);
+        if (nodes.droneSubGain) {
+            nodes.droneSubGain.gain.setTargetAtTime(profile.droneSubMix || 0.1, now, rampTime);
+        }
     }
 
     // --- Formant Filter Mix ---
@@ -1290,6 +1331,8 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         nodes.granularParams.melodyScale = profile.melodyScale;
         nodes.granularParams.melodyRate = profile.melodyRate;
         nodes.granularParams.melodyMix = profile.melodyMix;
+
+        nodes.granularParams.sparkleDensity = profile.sparkleDensity || 0;
     }
 
   }, []);
@@ -1675,7 +1718,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         droneHarmonic.type = 'sine';
         droneHarmonic.frequency.value = 110;
 
-        // New Sub-Harmonic Oscillator
+        // New Sub-Harmonic Oscillator (Abyssal Layer)
         const droneSub = ctx.createOscillator();
         droneSub.type = 'square';
         droneSub.frequency.value = 27.5;
@@ -1684,6 +1727,17 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         droneSubFilter.frequency.value = 100;
         const droneSubGain = ctx.createGain();
         droneSubGain.gain.value = 0.1;
+
+        // Abyssal AM Modulation
+        const droneSubLFO = ctx.createOscillator();
+        droneSubLFO.type = 'sine';
+        droneSubLFO.frequency.value = 0.1; // Slow throb
+        const droneSubAM = ctx.createGain();
+        droneSubAM.gain.value = 0.05;
+
+        droneSubLFO.connect(droneSubAM);
+        droneSubAM.connect(droneSubGain.gain);
+        droneSubLFO.start();
 
         droneSub.connect(droneSubFilter);
         droneSubFilter.connect(droneSubGain);
@@ -1783,15 +1837,6 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         const shimmerPan1 = ctx.createStereoPanner();
         shimmerPan1.pan.value = -0.8;
 
-        // AM Synthesis Logic: LFO modulates Gain
-        // We need to offset the gain so it doesn't go negative or clip awkwardly,
-        // although AudioParam values can be anything. For AM: Gain = 0.5 + 0.5 * sin(t)
-        // But here we can just let LFO modulate gain node which defaults to 1?
-        // Actually, let's just connect LFO to gain.gain.
-        // If gain.gain.value is 0.5, LFO +/- 1 will make it -0.5 to 1.5.
-        // Better: gain.gain.value = 0.5. LFO connects to gain.gain.
-        // We want amplitude 0 to 1.
-
         const amDepth1 = ctx.createGain();
         amDepth1.gain.value = 0.5;
         shimmerLFO1.connect(amDepth1);
@@ -1871,7 +1916,8 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
             bioFreqBase: 150,
             melodyScale: 'pacific',
             melodyRate: 0.2,
-            melodyMix: 0.1
+            melodyMix: 0.1,
+            sparkleDensity: 0
         };
 
         // Scheduler
@@ -1880,6 +1926,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         let nextGrainTime = ctx.currentTime;
         let nextBioTime = ctx.currentTime + 2;
         let nextMelodyTime = ctx.currentTime + 1;
+        let nextSparkleTime = ctx.currentTime + 1.5;
 
         const scheduler = () => {
             const currentTime = ctx.currentTime;
@@ -1887,6 +1934,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
             if (nextGrainTime < currentTime) nextGrainTime = currentTime;
             if (nextBioTime < currentTime) nextBioTime = currentTime;
             if (nextMelodyTime < currentTime) nextMelodyTime = currentTime;
+            if (nextSparkleTime < currentTime) nextSparkleTime = currentTime;
 
             while (nextGrainTime < currentTime + scheduleAheadTime) {
                 const minInterval = 0.05;
@@ -1896,6 +1944,19 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
 
                 triggerGrain(ctx, granularGain, granularParams, nextGrainTime);
                 nextGrainTime += interval + randomJitter;
+            }
+
+            // Sparkle Logic
+            if (nextSparkleTime < currentTime + scheduleAheadTime) {
+                if (granularParams.sparkleDensity > 0) {
+                     triggerSparkle(ctx, granularGain, nextSparkleTime, granularParams.mix * 0.5);
+                     // Random interval based on density
+                     const density = Math.max(0.01, granularParams.sparkleDensity);
+                     const interval = (1 / density) * (0.5 + Math.random());
+                     nextSparkleTime += interval;
+                } else {
+                     nextSparkleTime = currentTime + 1;
+                }
             }
 
             if (nextBioTime < currentTime + scheduleAheadTime) {
@@ -1932,7 +1993,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
             windFilter, windGain,
             currentsFilter, currentsGain, currentsLFO, currentsLFOGain, currentsPanLFO, // Currents
             resonatorGain, resFilter1, resFilter2, resFilter3, // Resonator
-            droneBase, droneDetune1, droneDetune2, droneHarmonic, droneSub,
+            droneBase, droneDetune1, droneDetune2, droneHarmonic, droneSub, droneSubGain, // Added droneSubGain to ref
             formantGain, // Stored for updates
             binauralLeft, binauralRight,
             // New Shimmer Layer
