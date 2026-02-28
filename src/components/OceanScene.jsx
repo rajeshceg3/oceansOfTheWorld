@@ -333,8 +333,8 @@ const OceanScene = ({ ocean, onTransitionComplete }) => {
     } else {
         // Normal drift behavior
         const t = state.clock.getElapsedTime();
-        const driftX = Math.sin(t * 0.1) * 2;
-        const driftY = Math.cos(t * 0.15) * 1;
+        const driftX = Math.sin(t * 0.1) * 2 + Math.sin(t * 0.05) * 1;
+        const driftY = Math.cos(t * 0.15) * 1 + Math.sin(t * 0.07) * 0.5;
         const mouseX = (mouse.x * 3);
         const mouseY = (mouse.y * 1.5);
         state.camera.position.x = THREE.MathUtils.lerp(state.camera.position.x, driftX + mouseX, 0.02);

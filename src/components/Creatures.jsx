@@ -41,8 +41,8 @@ const Jellyfish = ({ count = 5, colorRef }) => {
         const pulse = Math.sin(time * 2 + d.offset);
 
         // Contract: taller and thinner. Expand: shorter and wider.
-        const stretch = 1 + pulse * 0.1; // Height factor
-        const squash = 1 - pulse * 0.1; // Width factor
+        const stretch = 1 + pulse * 0.2; // Height factor
+        const squash = 1 - pulse * 0.15; // Width factor
 
         dummy.scale.set(d.scale * squash, d.scale * stretch, d.scale * squash);
 
@@ -122,7 +122,7 @@ const SchoolOfFish = ({ count = 200, colorRef }) => {
             data.forEach((d, i) => {
                 // Fish position relative to center
                 // Add some individual wave motion
-                const x = center.current.x + d.offset.x;
+                const x = center.current.x + d.offset.x + Math.sin(time * 5 + d.phase) * 0.1;
                 const y = center.current.y + d.offset.y + Math.sin(time * 2 + d.phase) * 0.2;
                 const z = center.current.z + d.offset.z;
 
@@ -301,6 +301,8 @@ const Ray = ({ count = 3, colorRef }) => {
                 const lookAtX = x + Math.cos(time * d.speed * 0.5) * 5;
                 const lookAtZ = z - Math.sin(time * d.speed) * 5;
                 dummy.lookAt(lookAtX, y, lookAtZ);
+
+                dummy.rotation.z = Math.sin(time * d.speed * 0.5 + d.phase) * -0.2;
 
                 // Wing flap (scale width)
                 const flap = Math.sin(time * 3 + d.phase) * 0.5 + 1.5;

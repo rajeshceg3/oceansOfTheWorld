@@ -50,7 +50,7 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange, isLoading, isSoun
 
       {/* Main Title & Description */}
       <div
-        className={`absolute bottom-24 md:bottom-32 left-0 w-full text-center pointer-events-none transition-all duration-[1500ms] motion-reduce:transition-none ease-in-out ${shouldHide ? 'opacity-0 translate-y-8 blur-md' : 'opacity-100 translate-y-0 blur-0'}`}
+        className={`absolute bottom-24 md:bottom-32 left-0 w-full text-center pointer-events-none transition-all duration-[1500ms] delay-100 motion-reduce:transition-none ease-in-out ${shouldHide ? 'opacity-0 translate-y-8 blur-md' : 'opacity-100 translate-y-0 blur-0'}`}
         aria-hidden={shouldHide}
       >
         <h1 className="text-4xl md:text-7xl font-thin tracking-[0.25em] text-white/95 uppercase drop-shadow-2xl font-display mb-4 md:mb-6">
@@ -70,7 +70,7 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange, isLoading, isSoun
 
       {/* Navigation Controls */}
       <div
-        className={`absolute bottom-6 md:bottom-12 left-0 w-full flex justify-center z-10 pointer-events-none transition-all duration-[1500ms] ease-out ${shouldHide ? 'opacity-0 translate-y-12' : 'opacity-100 translate-y-0'}`}
+        className={`absolute bottom-6 md:bottom-12 left-0 w-full flex justify-center z-10 pointer-events-none transition-all duration-[1500ms] delay-200 ease-out ${shouldHide ? 'opacity-0 translate-y-12' : 'opacity-100 translate-y-0'}`}
         aria-hidden={shouldHide}
       >
         <div className={`
@@ -89,7 +89,7 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange, isLoading, isSoun
               disabled={shouldHide}
               className={`
                 group relative flex flex-col items-center justify-center w-8 h-8 md:w-6 md:h-6
-                transition-all duration-500 outline-none rounded-full
+                transition-all duration-500 outline-none rounded-full active:scale-95
                 focus-visible:ring-2 focus-visible:ring-white/50
               `}
               aria-label={`Switch to ${ocean.name}`}
@@ -100,7 +100,7 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange, isLoading, isSoun
                   absolute w-2 h-2 rounded-full transition-all duration-700 ease-out
                   ${index === currentOceanIndex
                     ? 'bg-white shadow-[0_0_20px_rgba(255,255,255,1)] w-3 h-3 md:w-2.5 md:h-2.5 opacity-100'
-                    : 'bg-white/40 group-hover:bg-white group-hover:shadow-[0_0_10px_rgba(255,255,255,0.8)] opacity-60'
+                    : 'bg-white/40 group-hover:bg-white group-hover:scale-110 group-hover:shadow-[0_0_10px_rgba(255,255,255,0.8)] opacity-60'
                   }
                 `}
               />
@@ -122,7 +122,7 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange, isLoading, isSoun
       </div>
 
       {/* Top Right Info & Tour Button */}
-      <div className={`absolute top-6 right-6 md:top-10 md:right-10 flex flex-col items-end space-y-4 pointer-events-none transition-all duration-[2000ms] ${shouldHide ? 'opacity-0 -translate-y-4' : 'opacity-100 translate-y-0'}`}>
+      <div className={`absolute top-6 right-6 md:top-10 md:right-10 flex flex-col items-end space-y-4 pointer-events-none transition-all duration-[2000ms] delay-300 ${shouldHide ? 'opacity-0 -translate-y-4' : 'opacity-100 translate-y-0'}`}>
          <p className="text-[9px] md:text-[10px] font-thin text-white/70 tracking-[0.3em] uppercase">
             Immersion Mode
          </p>
@@ -131,7 +131,7 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange, isLoading, isSoun
             onClick={startTour}
             disabled={isTourActive || shouldHide}
             className={`
-              flex items-center space-x-2 pointer-events-auto
+              flex items-center space-x-2 pointer-events-auto active:scale-95
               text-[10px] md:text-xs font-light tracking-[0.2em] uppercase text-white/80 hover:text-white
               bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 rounded-full px-4 py-2
               transition-all duration-300 outline-none focus-visible:ring-2 focus-visible:ring-white/50
@@ -150,8 +150,8 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange, isLoading, isSoun
          className={`
             absolute top-6 left-6 md:top-10 md:left-10
             text-white/80 hover:text-white
-            pointer-events-auto cursor-pointer
-            transition-all duration-[2000ms]
+            pointer-events-auto cursor-pointer active:scale-95
+            transition-all duration-[2000ms] delay-400
             outline-none focus-visible:ring-2 focus-visible:ring-white/50 rounded-full p-2
             hover:bg-white/5 backdrop-blur-sm
             ${shouldHide ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0'}
@@ -168,6 +168,16 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange, isLoading, isSoun
             <VolumeX size={24} strokeWidth={1} className="opacity-70 drop-shadow-md" />
          )}
       </button>
+
+      {/* Immersion Mode Watermark */}
+      <div
+        className={`absolute bottom-6 right-6 md:bottom-10 md:right-10 pointer-events-none transition-all duration-[3000ms] ease-in-out ${shouldHide ? 'opacity-100' : 'opacity-0'}`}
+        aria-hidden={!shouldHide}
+      >
+        <p className="text-[10px] font-thin text-white/30 tracking-[0.5em] uppercase">
+          Immersion Mode
+        </p>
+      </div>
     </>
   );
 };
