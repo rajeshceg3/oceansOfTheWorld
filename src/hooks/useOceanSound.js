@@ -68,6 +68,7 @@ const AUDIO_PROFILES = {
     melodyRate: 0.2, // Sparse
     melodyMix: 0.15,
     droneSubMix: 0.2, // Added depth
+    tidalDepth: 0.2,
   },
   atlantic: {
     baseFreq: 80,
@@ -103,6 +104,7 @@ const AUDIO_PROFILES = {
     melodyRate: 0.3,
     melodyMix: 0.2,
     droneSubMix: 0.3,
+    tidalDepth: 0.25,
   },
   indian: {
     baseFreq: 70,
@@ -138,6 +140,7 @@ const AUDIO_PROFILES = {
     melodyRate: 0.25,
     melodyMix: 0.25,
     droneSubMix: 0.4,
+    tidalDepth: 0.15,
   },
   southern: {
     baseFreq: 90,
@@ -173,6 +176,7 @@ const AUDIO_PROFILES = {
     melodyRate: 0.15,
     melodyMix: 0.1,
     droneSubMix: 0.5,
+    tidalDepth: 0.3,
   },
   arctic: {
     baseFreq: 100,
@@ -208,6 +212,7 @@ const AUDIO_PROFILES = {
     melodyRate: 0.1, // Sparse
     melodyMix: 0.2,
     droneSubMix: 0.2,
+    tidalDepth: 0.35,
   }
 };
 
@@ -243,7 +248,7 @@ const createBrownNoiseBuffer = (ctx) => {
   return buffer;
 };
 
-const createImpulseResponse = (ctx, duration, decay, brightness = 1.0) => {
+const createImpulseResponse = (ctx, duration, decay, brightness = 1.0, shimmerDensity = 0.95) => {
   const rate = ctx.sampleRate;
   const length = rate * duration;
   const impulse = ctx.createBuffer(2, length, rate);
@@ -276,8 +281,8 @@ const createImpulseResponse = (ctx, duration, decay, brightness = 1.0) => {
     }
 
     // "Shimmer" Tail - High frequency sparkles in the reverb
-    // Enhanced for Ultrathink: More density in the tail
-    if (i > 10000 && Math.random() > (0.95 - (brightness * 0.02))) {
+    // Enhanced for Ultrathink: More density in the tail (Abyssal Echo)
+    if (i > 10000 && Math.random() > (shimmerDensity - (brightness * 0.02))) {
        const shimmerAmp = amp * 0.4 * brightness;
        // Add a high-frequency burst
        left[i] += (Math.random() * 2 - 1) * shimmerAmp;
@@ -1265,6 +1270,11 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
     }
 
     // --- Drone Cluster ---
+    // --- Tidal Modulator ---
+    if (nodes.tidalGain) {
+        nodes.tidalGain.gain.setTargetAtTime(profile.tidalDepth || 0.2, now, rampTime);
+    }
+
     nodes.droneBase.frequency.setTargetAtTime(profile.droneFreq, now, rampTime);
     nodes.droneDetune1.frequency.setTargetAtTime(profile.droneFreq + (profile.detune/100), now, rampTime);
     nodes.droneDetune2.frequency.setTargetAtTime(profile.droneFreq - (profile.detune/100), now, rampTime);
@@ -1311,7 +1321,8 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
 
     // --- Reverb (Space) ---
     if (nodes.convolver) {
-        nodes.convolver.buffer = createImpulseResponse(ctx, profile.verbDecay || 4, 3);
+        // Generate richer Abyssal Echo for Ultrathink
+        nodes.convolver.buffer = createImpulseResponse(ctx, profile.verbDecay || 4, 3, 1.0, 0.85);
     }
 
     // --- Granular & Bio Engine Params ---
@@ -1368,7 +1379,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
 
         // Reverb (Convolution)
         const convolver = ctx.createConvolver();
-        convolver.buffer = createImpulseResponse(ctx, 4, 4);
+        convolver.buffer = createImpulseResponse(ctx, 4, 4, 1.0, 0.85); // Richer initial verb
         const reverbGain = ctx.createGain();
         reverbGain.gain.value = 0.4;
         convolver.connect(reverbGain);
@@ -1697,6 +1708,14 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         phaserLFOGain.connect(phaserFilter.frequency);
         phaserLFO.start();
 
+        // LAYER 11: Tidal / Abyssal Modulator (Ultrathink)
+        // Global ultra-slow breath (100s cycle) to shift the physical pressure of the drone layer
+        const tidalLFO = ctx.createOscillator();
+        tidalLFO.type = 'sine';
+        tidalLFO.frequency.value = 0.01;
+        const tidalGain = ctx.createGain();
+        tidalGain.gain.value = 0.2; // Controlled via profile
+
         // Base Oscillators
         const droneBase = ctx.createOscillator();
         droneBase.type = 'sine';
@@ -1743,6 +1762,10 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         droneSubFilter.connect(droneSubGain);
         droneSubGain.connect(droneGain);
 
+        // Apply Tidal Pressure Modulator to overall drone volume
+        tidalLFO.connect(tidalGain);
+        tidalGain.connect(droneGain.gain);
+
         droneBase.connect(droneGain);
         droneDetune1.connect(pannerD1);
         pannerD1.connect(droneGain);
@@ -1787,6 +1810,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
         droneDetune2.start();
         droneHarmonic.start();
         droneSub.start();
+        tidalLFO.start();
 
         // -------------------------
         // LAYER 5: Binaural
@@ -1994,6 +2018,7 @@ export const useOceanSound = (isSoundOn, currentOceanIndex = 0) => {
             currentsFilter, currentsGain, currentsLFO, currentsLFOGain, currentsPanLFO, // Currents
             resonatorGain, resFilter1, resFilter2, resFilter3, // Resonator
             droneBase, droneDetune1, droneDetune2, droneHarmonic, droneSub, droneSubGain, // Added droneSubGain to ref
+            tidalLFO, tidalGain,
             formantGain, // Stored for updates
             binauralLeft, binauralRight,
             // New Shimmer Layer
