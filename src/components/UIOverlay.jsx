@@ -37,6 +37,36 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange, isLoading, isSoun
     };
   }, []);
 
+  // Chapter swipe on the ocean nav: horizontal swipes on the dot strip
+  // move to the previous/next ocean; arrow keys mirror it. The 3D scene
+  // has no drag of its own, so the gesture is scoped to this nav surface.
+  const navTouch = useRef(null);
+  const handleNavTouchStart = (e) => {
+    navTouch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  };
+  const handleNavTouchEnd = (e) => {
+    if (!navTouch.current) return;
+    const dx = e.changedTouches[0].clientX - navTouch.current.x;
+    const dy = e.changedTouches[0].clientY - navTouch.current.y;
+    navTouch.current = null;
+    if (Math.abs(dx) < 50 || Math.abs(dy) > 40) return;
+    const delta = dx < 0 ? 1 : -1;
+    onOceanChange((currentOceanIndex + delta + oceans.length) % oceans.length);
+  };
+
+  useEffect(() => {
+    const handleKeys = (e) => {
+      if (isTourActive) return;
+      if (e.key === 'ArrowLeft') {
+        onOceanChange((currentOceanIndex - 1 + oceans.length) % oceans.length);
+      } else if (e.key === 'ArrowRight') {
+        onOceanChange((currentOceanIndex + 1) % oceans.length);
+      }
+    };
+    window.addEventListener('keydown', handleKeys);
+    return () => window.removeEventListener('keydown', handleKeys);
+  }, [isTourActive, currentOceanIndex, oceans.length, onOceanChange]);
+
   const shouldHide = (isIdle || isLoading) && !isTourActive;
   const isNavHighlighted = isTourActive && currentStep?.highlight === 'navigation';
   const isAudioHighlighted = isTourActive && currentStep?.highlight === 'audio';
@@ -81,7 +111,10 @@ const UIOverlay = ({ oceans, currentOceanIndex, onOceanChange, isLoading, isSoun
             hover:bg-white/10 hover:border-white/20 hover:shadow-[0_0_30px_rgba(255,255,255,0.1)]
             shadow-2xl ${shouldHide ? 'pointer-events-none' : ''}
             ${isNavHighlighted ? 'ring-2 ring-white shadow-[0_0_50px_rgba(255,255,255,0.2)] bg-white/20 scale-105' : ''}
-        `}>
+        `}
+          onTouchStart={handleNavTouchStart}
+          onTouchEnd={handleNavTouchEnd}
+        >
           {oceans.map((ocean, index) => (
             <button
               key={ocean.id}

@@ -1,11 +1,37 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useTour } from '../contexts/TourContext';
 import { ArrowRight, ArrowLeft, X } from 'lucide-react';
 
 const TourOverlay = () => {
   const { isTourActive, currentStep, currentStepIndex, totalSteps, nextStep, prevStep, endTour } = useTour();
+  const cardTouch = useRef(null);
+
+  // Arrow keys move between tour steps; Escape ends the tour.
+  useEffect(() => {
+    if (!isTourActive) return undefined;
+    const handleKeys = (e) => {
+      if (e.key === 'ArrowLeft') prevStep();
+      else if (e.key === 'ArrowRight') nextStep();
+      else if (e.key === 'Escape') endTour();
+    };
+    window.addEventListener('keydown', handleKeys);
+    return () => window.removeEventListener('keydown', handleKeys);
+  }, [isTourActive, nextStep, prevStep, endTour]);
 
   if (!isTourActive) return null;
+
+  const handleTouchStart = (e) => {
+    cardTouch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  };
+  const handleTouchEnd = (e) => {
+    if (!cardTouch.current) return;
+    const dx = e.changedTouches[0].clientX - cardTouch.current.x;
+    const dy = e.changedTouches[0].clientY - cardTouch.current.y;
+    cardTouch.current = null;
+    if (Math.abs(dx) < 50 || Math.abs(dy) > 40) return;
+    if (dx < 0) nextStep();
+    else prevStep();
+  };
 
   const isLastStep = currentStepIndex === totalSteps - 1;
 
@@ -15,7 +41,11 @@ const TourOverlay = () => {
       <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px] transition-all duration-1000"></div>
 
       {/* Tour Card */}
-      <div className="relative pointer-events-auto bg-black/60 backdrop-blur-xl border border-white/10 p-6 md:p-8 rounded-2xl max-w-sm md:max-w-md w-full mx-4 shadow-2xl transform transition-all duration-500 animate-in fade-in zoom-in-95 slide-in-from-bottom-4">
+      <div
+        className="relative pointer-events-auto bg-black/60 backdrop-blur-xl border border-white/10 p-6 md:p-8 rounded-2xl max-w-sm md:max-w-md w-full mx-4 shadow-2xl transform transition-all duration-500 animate-in fade-in zoom-in-95 slide-in-from-bottom-4"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
 
         <div className="flex justify-between items-start mb-6">
           <div>
